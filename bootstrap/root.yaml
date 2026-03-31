@@ -1,26 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: metallb
+  name: root
   namespace: argocd
 spec:
   project: default
 
   source:
-    repoURL: https://metallb.github.io/metallb
-    chart: metallb
-    targetRevision: 0.13.12
-    helm:
-      values: |
-        installCRDs: true
+    repoURL: https://github.com/IntegratedDynamic/gitops
+    targetRevision: HEAD
+    path: clusters/local
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: metallb-system
+    namespace: argocd
 
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
