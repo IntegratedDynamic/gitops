@@ -9,7 +9,7 @@ spec:
   source:
     repoURL: https://github.com/IntegratedDynamic/gitops.git
     targetRevision: main
-    path: platform
+    path: platform/local
 
   destination:
     server: https://kubernetes.default.svc
