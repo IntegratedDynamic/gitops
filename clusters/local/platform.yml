@@ -1,15 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: platform
   namespace: argocd
 spec:
   project: default
 
   source:
-    repoURL: https://github.com/IntegratedDynamic/gitops
+    repoURL: https://github.com/IntegratedDynamic/gitops.git
     targetRevision: main
-    path: clusters/local
+    path: platform
 
   destination:
     server: https://kubernetes.default.svc
@@ -19,3 +19,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
