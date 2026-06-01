@@ -1,0 +1,14 @@
+replicas: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# No ingress controller on the scaleway cluster yet; public exposure is
+# deferred to the API gateway + SSO layer (see issue #3).
+ingress:
+  enabled: false

@@ -1,0 +1,29 @@
+{{- if eq .Values.env "scaleway" }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scaleway
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: clusters/{{ .Values.env }}
+    helm:
+      parameters:
+        - name: revision
+          value: {{ .Values.revision }}
+        - name: repoURL
+          value: {{ .Values.repoURL }}
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+{{- end }}
