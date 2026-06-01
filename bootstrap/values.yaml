@@ -1,7 +1,17 @@
 # Cluster environment to bootstrap; selects clusters/<env> and the matching
-# template below. Set by the external provisioner (e.g. the Terraform infra repo).
+# bootstrap/templates/<env>.yaml. Set by the external provisioner (e.g. the
+# Terraform infra repo).
+#
+# TODO(validation): enforce the expected 1:1 relation between
+# bootstrap/templates/<env>.yaml and clusters/<env>/ (as a PR check).
 env: local
+
 # Git ref this cluster tracks. Propagated down to every child Application so a
 # feature branch can be tested end-to-end before merging to main.
+#
+# On origin/main this MUST stay `main` — it should never be merged to main with
+# any other value. Overriding it on your own branch is a handy DevX trick to
+# deploy the whole tree from that branch; just don't merge that change in.
+# TODO(validation): enforce `revision: main` as a PR check before merge.
 revision: main
 repoURL: https://github.com/IntegratedDynamic/gitops.git
