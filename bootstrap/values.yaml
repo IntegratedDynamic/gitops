@@ -1,0 +1,7 @@
+# Cluster environment to bootstrap; selects clusters/<env> and the matching
+# template below. Set by the external provisioner (e.g. the Terraform infra repo).
+env: local
+# Git ref this cluster tracks. Propagated down to every child Application so a
+# feature branch can be tested end-to-end before merging to main.
+revision: main
+repoURL: https://github.com/IntegratedDynamic/gitops.git
