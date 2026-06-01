@@ -1,0 +1,5 @@
+# Git ref every child Application tracks. Defaults to main; the parent
+# (bootstrap) overrides it so a feature branch propagates through the whole
+# app-of-apps tree.
+revision: main
+repoURL: https://github.com/IntegratedDynamic/gitops.git
