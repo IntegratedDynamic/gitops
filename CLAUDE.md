@@ -63,3 +63,17 @@ kubectl --context minikube apply --dry-run=client -f platform/local/kube-prometh
 4. `bootstrap/templates/staging.yaml` guarded by `{{- if eq .Values.env "staging" }}` as the entry point for external provisioners
 
 **New platform tool:** Add a file to `platform/<env>/` following `platform/local/ingress-nginx.yml`.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
+
+## Roadmap conventions
+
+Vocabulaire de specs/roadmap (EARS, `Done quand:`/`Dépend de:`, phases Spec Kit) :
+@../orchestration/CONVENTIONS.md
+
+> Fallback : si ce repo est cloné seul (le `@import` ci-dessus ne résout pas),
+> le fichier vit dans le repo d'orchestration `orchestration/CONVENTIONS.md`
+> (source de vérité de la roadmap cross-repo).
