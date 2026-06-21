@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openbao-init
+description: Restores the latest OpenBao snapshot from S3 on a fresh (empty) cluster, via an ArgoCD sync hook
+type: application
+version: 0.1.0
+appVersion: "0.3.0"

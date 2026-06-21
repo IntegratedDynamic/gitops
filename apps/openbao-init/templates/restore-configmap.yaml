@@ -1,0 +1,63 @@
+{{- if .Values.restore.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openbao-init-restore
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # Normal resource (see serviceaccount.yaml). Wave 0 → exists before the Job.
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  restore.sh: |
+    #!/usr/bin/env sh
+    # Restore the latest OpenBao snapshot from S3 on a fresh (empty) cluster.
+    # Mirrors the upstream backup script (bao-snapshot.sh), same image.
+    # Idempotent: never touches an already-initialized cluster.
+    set -eu
+
+    # 1. Wait for the OpenBao API. `openbao` syncs in parallel (separate
+    #    Application); its pod comes up 0/1 (uninitialized) but the `openbao`
+    #    Service publishes not-ready addresses, so the API is reachable. `bao
+    #    status` returns rc 1 on a connection error, rc 2 when reachable-but-
+    #    sealed/uninitialized. Budget ~10 min for a cold start.
+    i=0
+    while true; do
+      # Capture the real exit code: `|| rc=$?` both shields `set -e` and avoids
+      # the `if`-without-`else` trap that would reset $? to 0. rc 0 = unsealed,
+      # rc 2 = reachable but sealed/uninitialized — both mean the API is up.
+      rc=0
+      bao status >/dev/null 2>&1 || rc=$?
+      if [ "$rc" = "0" ] || [ "$rc" = "2" ]; then break; fi
+      i=$((i + 1))
+      if [ "$i" -gt 120 ]; then echo "timeout waiting for OpenBao API"; exit 1; fi
+      echo "waiting for OpenBao API..."
+      sleep 5
+    done
+
+    # 2. Idempotence guard: exit 0 of `init -status` means already initialized.
+    #    Never clobber a live cluster (protects against selfHeal re-syncs).
+    if bao operator init -status >/dev/null 2>&1; then
+      echo "OpenBao already initialized — nothing to restore."
+      exit 0
+    fi
+
+    # 3. Locate the latest snapshot. Names sort chronologically.
+    LATEST=$(s3cmd ls "$S3_URI/" --host="$S3_HOST" --host-bucket="$S3_BUCKET" $S3CMD_EXTRA_FLAG \
+             | sort | tail -1 | awk '{print $4}')
+    if [ -z "$LATEST" ]; then
+      echo "No snapshot found in S3 — leaving node uninitialized for manual bootstrap."
+      exit 0
+    fi
+    echo "Latest snapshot: $LATEST"
+
+    # 4. Throwaway init: works on empty storage and yields a root token valid long
+    #    enough to perform the restore. The restore replaces all storage (auth,
+    #    policies, secrets) so this token becomes void afterwards — by design.
+    ROOT=$(bao operator init | grep -i 'Initial Root Token' | awk '{print $NF}')
+    export BAO_TOKEN="$ROOT"
+
+    s3cmd get "$LATEST" /tmp/restore.snapshot \
+      --host="$S3_HOST" --host-bucket="$S3_BUCKET" $S3CMD_EXTRA_FLAG
+    bao operator raft snapshot restore /tmp/restore.snapshot
+    echo "Restored $LATEST (throwaway root token is now void)."
+{{- end }}

@@ -172,6 +172,33 @@ The `platform` App-of-Apps picks it up automatically.
 
 ---
 
+## Local development workflow
+
+**Smoke test** (destroy + rebuild everything from scratch):
+```bash
+# from the infrastructure repo
+mise run reset && mise run dev
+```
+
+ArgoCD takes a few minutes to reconcile all apps — be patient. The difference between "still syncing" and "actually stuck" is visible in:
+```bash
+kubectl --context minikube get applications -n argocd
+```
+
+**Important:** before running, check `infrastructure/02-cluster/local/nico.auto.tfvars` — it contains the `gitops_revision` variable that controls which branch of this repo ArgoCD will deploy from. If you're testing a feature branch, set it there:
+```hcl
+gitops_revision = "feat/your-branch"
+```
+If it points to `main` and your changes aren't merged yet, ArgoCD will deploy the old code.
+
+**Validate OpenBao is up:**
+```bash
+kubectl --context minikube get clustersecretstore openbao
+# READY=True → OpenBao running, unsealed, ESO connected
+```
+
+---
+
 ## Accessing the demo app (local)
 
 After `mise run reset && mise run dev` in the infrastructure repo:

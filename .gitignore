@@ -1,0 +1,21 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Secrets (never commit)
+*.secret.yaml
+*.secret.yml
+kubeconfig*
+*.key
+*.pem
+secrets/
+
+# Helm
+*.tgz
+
+# Temp
+tmp/

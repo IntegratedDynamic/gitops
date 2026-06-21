@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openbao-init
+  namespace: argocd
+  annotations:
+    # Wave 0 (parallel with `platform`, NOT after it): on a from-scratch cluster
+    # openbao starts uninitialized → sealed → 0/1 NotReady → the `openbao` app
+    # never reaches Healthy until restored. Gating this behind platform's health
+    # would deadlock. Running in parallel lets the restore job initialize openbao
+    # while it is still 0/1 (the `openbao` Service publishes not-ready addresses).
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: apps/openbao-init
+    helm:
+      valueFiles:
+        - values-local.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -31,6 +31,7 @@ minikube status                                                    # cluster run
 kubectl --context minikube get pods -n argocd                     # ArgoCD healthy?
 kubectl --context minikube get applications -n argocd             # apps synced?
 kubectl --context minikube get pods -n ingress-nginx              # ingress up?
+kubectl --context minikube get clustersecretstore openbao         # OpenBao + ESO ready?
 ```
 
 ## Validation commands
@@ -40,16 +41,21 @@ Always target the local cluster explicitly to avoid accidental execution against
 ```bash
 # Lint a Helm chart
 helm lint apps/demo/ -f apps/demo/values-local.yaml
+helm lint apps/openbao-init/ -f apps/openbao-init/values-local.yaml
+helm lint apps/openbao-init/ -f apps/openbao-init/values-scaleway.yaml
 
 # Render an app chart to inspect output
 helm template demo apps/demo/ -f apps/demo/values-local.yaml
+helm template openbao-init apps/openbao-init/ -f apps/openbao-init/values-local.yaml
 
 # Render the app-of-apps charts (confirm revision propagation)
 helm template boot bootstrap/ --set env=local --set revision=<branch>
-helm template loc clusters/local/ --set revision=<branch>
+helm template loc clusters/local/ --set revision=<branch> --set repoURL=<repo>
+helm template loc clusters/scaleway/ --set revision=<branch> --set repoURL=<repo>
 
 # Validate a platform Application manifest
 kubectl --context minikube apply --dry-run=client -f platform/local/kube-prometheus-stack.yml
+kubectl --context minikube apply --dry-run=client -f platform/local/openbao.yml
 ```
 
 ## Adding things
@@ -63,3 +69,39 @@ kubectl --context minikube apply --dry-run=client -f platform/local/kube-prometh
 4. `bootstrap/templates/staging.yaml` guarded by `{{- if eq .Values.env "staging" }}` as the entry point for external provisioners
 
 **New platform tool:** Add a file to `platform/<env>/` following `platform/local/ingress-nginx.yml`.
+
+<!-- SPECKIT START -->
+## Active Feature
+
+**Feature**: Replace Infisical with OSS Secrets Backend
+**Plan**: [specs/001-replace-infisical-oss-secrets/plan.md](specs/001-replace-infisical-oss-secrets/plan.md)
+**Tasks**: [specs/001-replace-infisical-oss-secrets/tasks.md](specs/001-replace-infisical-oss-secrets/tasks.md)
+**Status**: Tasks generated — ready for `/speckit-implement`
+**Tool**: OpenBao (MPL 2.0) — decided 2026-06-21
+
+### Quick reference
+
+| Artifact | Path |
+|----------|------|
+| Spec | `specs/001-replace-infisical-oss-secrets/spec.md` |
+| Plan | `specs/001-replace-infisical-oss-secrets/plan.md` |
+| Research | `specs/001-replace-infisical-oss-secrets/research.md` |
+| Data model | `specs/001-replace-infisical-oss-secrets/data-model.md` |
+| Contracts | `specs/001-replace-infisical-oss-secrets/contracts/` |
+| Quickstart | `specs/001-replace-infisical-oss-secrets/quickstart.md` |
+| Tasks | `specs/001-replace-infisical-oss-secrets/tasks.md` |
+
+### MVP scope (US1, Phases 1–3, tasks T001–T020)
+
+1. Scaffold `apps/openbao-init/` Helm chart (T001–T004)
+2. Write `platform/<env>/openbao.yml` + `external-secrets.yml` (T005–T009)
+3. Write init Job, RBAC, policies, ClusterSecretStore, cluster templates, sync waves (T010–T018)
+4. Validate: `helm lint apps/openbao-init/` + local Scenario 1 smoke test (T019–T020)
+
+### Key constraints
+
+- `scaleway-s3-credentials` Secret created by infra Terraform, not this repo — init Job reads it
+- S3 backend: no HA on Scaleway (no DynamoDB locking) → single replica
+- Init Job must be idempotent; root token revoked after first init
+- All external Helm chart versions must be pinned explicitly
+<!-- SPECKIT END -->
