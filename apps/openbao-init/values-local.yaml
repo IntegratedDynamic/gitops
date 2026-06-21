@@ -1,0 +1,7 @@
+# Local cluster overrides. Mirrors platform/local/openbao.yml snapshotAgent.config
+# so the restore reads from the same bucket the backups are pushed to.
+s3:
+  host: s3.fr-par.scw.cloud
+  bucket: backup-dev-id
+  uri: s3://backup-dev-id
+  extraFlag: "--server-side-encryption -v"

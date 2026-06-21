@@ -1,0 +1,27 @@
+# Baseline values for the OpenBao restore-at-boot job.
+# Per-environment S3 settings live in values-<env>.yaml.
+
+# Set to false to render the chart as a no-op (e.g. environments without snapshots).
+restore:
+  enabled: true
+
+# Image carrying BOTH `bao` and `s3cmd` — same image the snapshot agent uses,
+# so the restore job mirrors the upstream backup script (bao-snapshot.sh).
+image:
+  repository: ghcr.io/openbao/openbao-snapshot-agent
+  tag: "0.3.0"
+  pullPolicy: IfNotPresent
+
+# In-cluster OpenBao API. Matches the snapshot agent's BAO_ADDR.
+baoAddr: http://openbao.openbao.svc:8200
+
+# S3 credentials Secret (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).
+# Created out-of-band by terraform, shared with the snapshot agent.
+s3CredentialsSecret: scaleway-s3-credentials
+
+# S3 location of the snapshots — overridden per environment.
+s3:
+  host: ""
+  bucket: ""
+  uri: ""
+  extraFlag: ""

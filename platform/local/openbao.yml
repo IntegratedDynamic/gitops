@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openbao
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+
+  source:
+    repoURL: https://openbao.github.io/openbao-helm
+    chart: openbao
+    targetRevision: 0.28.4
+    helm:
+      values: |
+        server:
+          # dev:
+            # enabled: true
+          ha:
+            enabled: false
+          # AWS credentials the awskms seal authenticates with. OpenBao must read
+          # these at startup to unseal — they cannot come from OpenBao itself
+          # (chicken-and-egg). Secret created out-of-band by 02-cluster/local
+          # terraform; values originate from 03-backup/scaleway kms.tf.
+          extraSecretEnvironmentVars:
+            - envName: AWS_ACCESS_KEY_ID
+              secretName: openbao-unseal-aws
+              secretKey: AWS_ACCESS_KEY_ID
+            - envName: AWS_SECRET_ACCESS_KEY
+              secretName: openbao-unseal-aws
+              secretKey: AWS_SECRET_ACCESS_KEY
+          standalone:
+            config: |
+              ui = true
+              listener "tcp" {
+                address     = "0.0.0.0:8200"
+                tls_disable = true
+              }
+              storage "raft" {
+                path    = "/openbao/data"
+                node_id = "openbao-0"
+              }
+              # Auto-unseal via AWS KMS. region + kms_key_id are non-secret
+              # (the IAM creds above gate access). On first `bao operator init`
+              # this yields RECOVERY keys, not unseal keys — store them safely.
+              seal "awskms" {
+                region     = "eu-west-3"
+                kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
+              }
+
+        
+
+        snapshotAgent:
+          enabled: true
+          schedule: "0 * * * *" # Every hours, at 0min.
+          s3CredentialsSecret: "scaleway-s3-credentials" 
+          config:
+            s3Host: "s3.fr-par.scw.cloud"
+            s3Bucket: "backup-dev-id"
+            s3Uri: "s3://backup-dev-id"
+            s3ExpireDays: "14"
+            s3cmdExtraFlag: "--server-side-encryption -v"
+            # baoAuthPath: "kubernetes"
+            # baoRole: "snapshot"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
