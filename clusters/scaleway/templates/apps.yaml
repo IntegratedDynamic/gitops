@@ -1,19 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform
+  name: apps
   namespace: argocd
   labels:
-    domain: platform
+    domain: apps
 spec:
-  project: platform
+  project: apps
 
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.revision }}
-    # platform/local is now a Helm app-of-apps chart that fans out into the
-    # platform sub-domains, so revision/repoURL are threaded down as params.
-    path: platform/local
+    path: workloads/scaleway
     helm:
       parameters:
         - name: revision

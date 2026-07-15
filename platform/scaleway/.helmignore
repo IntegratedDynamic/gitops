@@ -1,0 +1,4 @@
+# Sub-domains are their own ArgoCD apps (loaded directly by path), not part of
+# this parent chart's render.
+secrets/
+observability/

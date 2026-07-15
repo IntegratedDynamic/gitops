@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-local
+description: App-of-apps for the platform domain (secrets, observability, ingress) on the local cluster
+type: application
+version: 0.1.0

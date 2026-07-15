@@ -1,0 +1,5 @@
+apiVersion: v2
+name: workloads-scaleway
+description: App-of-apps for the 'apps' domain (in-house workloads) on the scaleway cluster
+type: application
+version: 0.1.0

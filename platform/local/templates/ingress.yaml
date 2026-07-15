@@ -1,25 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform
+  name: platform-ingress
   namespace: argocd
   labels:
     domain: platform
+    subdomain: ingress
 spec:
   project: platform
 
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.revision }}
-    # platform/local is now a Helm app-of-apps chart that fans out into the
-    # platform sub-domains, so revision/repoURL are threaded down as params.
-    path: platform/local
-    helm:
-      parameters:
-        - name: revision
-          value: {{ .Values.revision }}
-        - name: repoURL
-          value: {{ .Values.repoURL }}
+    # Directory source: children are external Helm charts (pinned versions), no
+    # git revision to thread — so a plain folder of manifests, not a chart.
+    path: platform/local/ingress
+    directory:
+      recurse: false
 
   destination:
     server: https://kubernetes.default.svc

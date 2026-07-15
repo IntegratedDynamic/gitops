@@ -3,8 +3,11 @@ kind: Application
 metadata:
   name: kube-prometheus-stack
   namespace: argocd
+  labels:
+    domain: platform
+    subdomain: observability
 spec:
-  project: default
+  project: platform
 
   source:
     repoURL: https://prometheus-community.github.io/helm-charts

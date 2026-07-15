@@ -1,0 +1,5 @@
+apiVersion: v2
+name: workloads-local
+description: App-of-apps for the 'apps' domain (in-house workloads) on the local cluster
+type: application
+version: 0.1.0

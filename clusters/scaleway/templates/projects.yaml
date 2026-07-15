@@ -1,0 +1,51 @@
+# AppProjects = team/ownership boundary + UI "Projects" filter. Created at wave -1
+# so they exist before the Applications that reference them (platform / apps).
+#
+# Intentionally permissive for now: we structure and group, we don't lock down.
+# Tighten sourceRepos / destinations / *ResourceWhitelist per team once real
+# identities + an argocd-rbac-cm policy exist (that policy lives in the infra repo).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    domain: platform
+spec:
+  description: Platform infrastructure (secrets, observability, ingress) — platform team
+  sourceRepos:
+    - '*'
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    domain: apps
+spec:
+  description: In-house workloads — apps team
+  sourceRepos:
+    - '*'
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

@@ -1,0 +1,6 @@
+# Sub-domains are their own ArgoCD apps (loaded directly by path), not part of
+# this parent chart's render. Keep them out so `helm template platform/local`
+# only emits the sub-domain app-of-apps in templates/.
+secrets/
+observability/
+ingress/

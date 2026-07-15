@@ -1,22 +1,27 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: demo
+  name: apps
   namespace: argocd
+  labels:
+    domain: apps
 spec:
-  project: default
+  project: apps
 
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.revision }}
-    path: apps/demo
+    path: workloads/local
     helm:
-      valueFiles:
-        - values-scaleway.yaml
+      parameters:
+        - name: revision
+          value: {{ .Values.revision }}
+        - name: repoURL
+          value: {{ .Values.repoURL }}
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: demo
+    namespace: argocd
 
   syncPolicy:
     automated:

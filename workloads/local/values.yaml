@@ -1,0 +1,4 @@
+# Git ref every child Application tracks. Passed down from the parent app-of-apps
+# so a feature branch propagates through the whole tree (see CLAUDE.md).
+revision: main
+repoURL: https://github.com/IntegratedDynamic/gitops.git

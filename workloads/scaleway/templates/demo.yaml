@@ -1,21 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: external-secrets
+  name: demo
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    domain: apps
 spec:
-  project: default
+  project: apps
 
   source:
-    repoURL: https://external-secrets.io
-    chart: external-secrets
-    targetRevision: 2.6.0
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: apps/demo
+    helm:
+      valueFiles:
+        - values-scaleway.yaml
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: external-secrets
+    namespace: demo
 
   syncPolicy:
     automated:
@@ -23,4 +26,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
