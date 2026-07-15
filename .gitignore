@@ -13,6 +13,10 @@ kubeconfig*
 *.key
 *.pem
 secrets/
+# ...except the platform "secrets" sub-domain, which holds ArgoCD Application
+# manifests (openbao / external-secrets), not actual secret material.
+!platform/local/secrets/
+!platform/scaleway/secrets/
 
 # Helm
 *.tgz
