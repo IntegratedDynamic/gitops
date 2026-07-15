@@ -12,11 +12,10 @@ spec:
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.revision }}
-    # Directory source: children are external Helm charts (pinned versions), no
-    # git revision to thread — so a plain folder of manifests, not a chart.
+    # Directory source (no Chart.yaml here): children are external Helm charts
+    # (pinned versions), no git revision to thread. recurse is false by default —
+    # do NOT set it explicitly, ArgoCD normalizes it away → perpetual OutOfSync.
     path: platform/local/observability
-    directory:
-      recurse: false
 
   destination:
     server: https://kubernetes.default.svc
