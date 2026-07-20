@@ -1,0 +1,11 @@
+# Cluster scaleway (staging).
+#
+# Volontairement désactivé en V0 : GitHub est une ressource *globale*, pas une
+# ressource par cluster. Si local et scaleway synchronisaient les mêmes cibles,
+# ils écraseraient tour à tour les mêmes secrets d'organisation — sans dégât
+# (les valeurs sont identiques) mais avec deux sources d'écriture concurrentes
+# et un historique d'audit illisible côté GitHub.
+#
+# Pour activer : décider *quel* cluster fait autorité sur la synchro GitHub,
+# et ne laisser des `targets` non vides que sur celui-là.
+targets: []
