@@ -1,0 +1,5 @@
+apiVersion: v2
+name: secrets-sync
+description: Push secrets from OpenBao to GitHub Actions secrets via ESO
+type: application
+version: 0.1.0

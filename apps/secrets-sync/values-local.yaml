@@ -1,0 +1,9 @@
+# Cluster local (minikube).
+#
+# C'est ici que la V0 est validée : le cluster local pousse réellement vers la
+# vraie organisation GitHub. Les cibles de la baseline (values.yaml) suffisent,
+# rien à surcharger pour l'instant.
+#
+# Attention si tu actives un jour secrets-sync sur scaleway en parallèle : les
+# deux clusters pousseraient les mêmes clés vers les mêmes secrets GitHub, en
+# se réécrivant mutuellement toutes les heures. Voir values-scaleway.yaml.
