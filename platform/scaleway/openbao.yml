@@ -17,6 +17,17 @@ spec:
         server:
           ha:
             enabled: false
+          # AWS credentials the awskms seal authenticates with. OpenBao must read
+          # these at startup to unseal — they cannot come from OpenBao itself
+          # (chicken-and-egg). Secret created out-of-band by 02-cluster/scaleway
+          # terraform; values originate from 03-backup/scaleway kms.tf.
+          extraSecretEnvironmentVars:
+            - envName: AWS_ACCESS_KEY_ID
+              secretName: openbao-unseal-aws
+              secretKey: AWS_ACCESS_KEY_ID
+            - envName: AWS_SECRET_ACCESS_KEY
+              secretName: openbao-unseal-aws
+              secretKey: AWS_SECRET_ACCESS_KEY
           standalone:
             config: |
               ui = true
@@ -27,6 +38,13 @@ spec:
               storage "raft" {
                 path    = "/openbao/data"
                 node_id = "openbao-0"
+              }
+              # Auto-unseal via AWS KMS. region + kms_key_id are non-secret
+              # (the IAM creds above gate access). On first `bao operator init`
+              # this yields RECOVERY keys, not unseal keys — store them safely.
+              seal "awskms" {
+                region     = "eu-west-3"
+                kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
               }
 
   destination:
