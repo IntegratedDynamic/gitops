@@ -1,0 +1,5 @@
+apiVersion: v2
+name: external-dns-init
+description: Materializes Scaleway DNS API credentials from OpenBao into a Secret external-dns can mount
+type: application
+version: 0.1.0

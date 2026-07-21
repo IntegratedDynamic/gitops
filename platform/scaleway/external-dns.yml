@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns
+    chart: external-dns
+    targetRevision: 1.21.1
+    helm:
+      values: |
+        provider:
+          name: scaleway
+
+        # Credentials materialized by apps/external-dns-init from OpenBao
+        # (see clusters/scaleway/templates/external-dns-init.yaml).
+        env:
+          - name: SCW_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: external-dns-scaleway-credentials
+                key: SCW_ACCESS_KEY
+          - name: SCW_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: external-dns-scaleway-credentials
+                key: SCW_SECRET_KEY
+
+        # scalepack.fr, bought through Scaleway Domains & DNS. Leave
+        # txtOwnerId as-is going forward — changing it orphans existing TXT
+        # ownership records.
+        domainFilters:
+          - scalepack.fr
+        policy: upsert-only
+        registry: txt
+        txtOwnerId: scaleway
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
