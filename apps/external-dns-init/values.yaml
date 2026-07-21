@@ -1,0 +1,21 @@
+# Pulls the Scaleway Domains & DNS API credentials from OpenBao into a Secret
+# that platform/scaleway/external-dns.yml wires into the external-dns pod via
+# env[].valueFrom.secretKeyRef. OpenBao stays the source of truth — no
+# credential value ever lives in this repo.
+#
+# The KV entry itself is seeded by hand in OpenBao (same out-of-band workflow
+# as the other manually-managed roles/policies), with keys SCW_ACCESS_KEY /
+# SCW_SECRET_KEY. Needs an API key scoped to the Scaleway Domains API,
+# belonging to the account that owns the domain once one is bought.
+namespace: external-dns
+
+# ClusterSecretStore declared by the openbao-init chart.
+clusterSecretStoreName: openbao
+
+openbao:
+  path: apps/external-dns/scaleway-dns-credentials
+
+secret:
+  name: external-dns-scaleway-credentials
+
+refreshInterval: 1h
