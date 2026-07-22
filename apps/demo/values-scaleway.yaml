@@ -30,3 +30,9 @@ auth:
   cookieDomain: scalepack.fr
   clusterSecretStoreName: openbao
   openbaoPath: apps/dex/credentials
+  # Service created by platform/scaleway/dex.yml — referenced directly so
+  # OIDC discovery/token calls don't depend on external DNS (see
+  # apps/demo/templates/securitypolicy.yaml).
+  dexServiceName: dex
+  dexServiceNamespace: gateway
+  dexServicePort: 5556
