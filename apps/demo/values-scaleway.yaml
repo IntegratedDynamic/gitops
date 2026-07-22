@@ -18,3 +18,15 @@ gateway:
   hostname: demo.scalepack.fr
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
+
+# demo is the guinea pig for GitHub org SSO — see apps/dex-init and
+# platform/scaleway/dex.yml. Its callback URL is registered in Dex's
+# staticClients.envoy-gateway.redirectURIs.
+auth:
+  enabled: true
+  issuer: https://auth.scalepack.fr
+  clientID: envoy-gateway
+  clientSecretName: demo-sso-client-secret
+  cookieDomain: scalepack.fr
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/dex/credentials

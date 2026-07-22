@@ -1,0 +1,26 @@
+{{- if .Values.auth.enabled }}
+# Gates this app behind GitHub org SSO (via Dex, see platform/scaleway/dex.yml).
+# Envoy Gateway's native OIDC filter requires the redirectURL to live on this
+# same HTTPRoute's own hostname — it intercepts /oauth2/callback itself
+# before the request ever reaches the backend below, since this HTTPRoute
+# has no path `matches` (it already catches every path on this host).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ .Release.Name }}-sso
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ .Release.Name }}
+  oidc:
+    provider:
+      issuer: {{ .Values.auth.issuer | quote }}
+    clientID: {{ .Values.auth.clientID | quote }}
+    clientSecret:
+      name: {{ .Values.auth.clientSecretName }}
+    redirectURL: "https://{{ .Values.gateway.hostname }}/oauth2/callback"
+    logoutPath: "/oauth2/logout"
+    cookieDomain: {{ .Values.auth.cookieDomain | quote }}
+{{- end }}

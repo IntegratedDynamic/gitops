@@ -1,0 +1,5 @@
+apiVersion: v2
+name: dex-init
+description: Materializes the GitHub OAuth App + Envoy Gateway client credentials from OpenBao into a Secret dex can mount
+type: application
+version: 0.1.0
