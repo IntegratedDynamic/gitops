@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-webhook-scaleway
+  namespace: argocd
+  annotations:
+    # Needs cert-manager's CRDs (wave -1). The scaleway-dns-credentials Secret
+    # it reads from is materialized later (wave 3, apps/cert-manager-webhook-init)
+    # — same eventual-consistency gap external-dns already tolerates against
+    # its own credentials Secret; self-heal picks the pod up once it lands.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+
+  source:
+    repoURL: https://helm.scw.cloud/
+    chart: scaleway-certmanager-webhook
+    targetRevision: 0.4.2
+    helm:
+      values: |
+        # Secret keys are SCW_ACCESS_KEY / SCW_SECRET_KEY, same as the
+        # external-dns credentials this reuses — envFrom-injected into the
+        # webhook deployment as its default Scaleway credentials.
+        secret:
+          externalSecretName: scaleway-dns-credentials
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

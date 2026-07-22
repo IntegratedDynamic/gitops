@@ -1,0 +1,3 @@
+# No sane defaults across environments — this chart is scaleway-specific
+# (domain, ACME issuer, DNS01 credentials all belong to that one cluster).
+# Every value is set in values-<env>.yaml.

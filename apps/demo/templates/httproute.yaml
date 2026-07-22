@@ -1,0 +1,21 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.gatewayName }}
+      namespace: {{ .Values.gateway.gatewayNamespace }}
+      # https only — otherwise this route would also bind to the http
+      # listener and serve plaintext directly, bypassing gateway-config's
+      # catch-all HTTP->HTTPS redirect route.
+      sectionName: https
+  hostnames:
+    - {{ .Values.gateway.hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ .Release.Name }}
+          port: 80
+{{- end }}
