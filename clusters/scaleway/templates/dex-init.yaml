@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dex-init
+  namespace: argocd
+  annotations:
+    # Wave 5: its HTTPRoute needs gateway-config's wave-4 Gateway to exist
+    # first (same reasoning as demo, wave 5). Its ExternalSecret being this
+    # late (rather than wave 3 alongside the other *-init charts) is fine —
+    # dex (in the wave-0 platform app) just retries via selfHeal until the
+    # Secret shows up, same tolerated race as external-dns.
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: apps/dex-init
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gateway
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

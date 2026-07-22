@@ -1,0 +1,36 @@
+# Pulls Dex's credentials from OpenBao into a Secret that
+# platform/scaleway/dex.yml references via envVars/secretKeyRef:
+#   github-client-id / github-client-secret : the GitHub OAuth App
+#     (github.com/organizations/IntegratedDynamic/settings/applications),
+#     used by Dex's own "github" connector.
+#   envoy-client-secret : a random static secret (`openssl rand -hex 32`)
+#     shared by every protected app's SecurityPolicy — it's the credential
+#     Envoy Gateway itself uses to talk to Dex as an OIDC client, not
+#     something end users ever see.
+#
+# The KV entry is seeded by hand in OpenBao (same out-of-band workflow as
+# the other manually-managed roles/policies).
+namespace: gateway
+
+# ClusterSecretStore declared by the openbao-init chart.
+clusterSecretStoreName: openbao
+
+openbao:
+  path: apps/dex/credentials
+
+secret:
+  name: dex-credentials
+
+refreshInterval: 1h
+
+# Service created by platform/scaleway/dex.yml (the official dex chart,
+# released under the name "dex" — its fullname helper collapses to just
+# that when release name == chart name).
+dex:
+  serviceName: dex
+  servicePort: 5556
+
+gateway:
+  hostname: auth.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

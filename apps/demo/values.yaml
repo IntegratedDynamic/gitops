@@ -21,3 +21,9 @@ ingress:
 # by default so local/other envs keep using the ingress-nginx path above.
 gateway:
   enabled: false
+
+# GitHub org SSO via Dex (scaleway only — see values-scaleway.yaml). Disabled
+# by default; requires gateway.enabled since it targets this app's own
+# HTTPRoute.
+auth:
+  enabled: false
