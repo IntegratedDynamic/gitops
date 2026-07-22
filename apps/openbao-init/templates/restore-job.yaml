@@ -9,9 +9,10 @@ metadata:
     # doesn't exist → OutOfSync → ArgoCD creates and runs it. Re-runs on a live
     # cluster are prevented by the idempotence guard in restore.sh.
     argocd.argoproj.io/sync-wave: "1"
-    # A Job's pod template is immutable; Replace lets ArgoCD recreate it cleanly
-    # when the spec (e.g. restore.sh) changes, instead of failing on the patch.
-    argocd.argoproj.io/sync-options: Replace=true
+    # A Job's spec.selector/template.labels are immutable — Replace=true alone
+    # still does a plain `kubectl replace` (PUT), which the API server rejects
+    # just the same. Force=true makes ArgoCD delete+recreate instead.
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 spec:
   backoffLimit: 2
   template:
