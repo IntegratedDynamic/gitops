@@ -47,6 +47,19 @@ spec:
                 kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
               }
 
+        snapshotAgent:
+          enabled: true
+          schedule: "0 * * * *" # Every hours, at 0min.
+          s3CredentialsSecret: "scaleway-s3-credentials" 
+          config:
+            s3Host: "s3.fr-par.scw.cloud"
+            s3Bucket: "backup-dev-id"
+            s3Uri: "s3://backup-dev-id"
+            s3ExpireDays: "14"
+            s3cmdExtraFlag: "--server-side-encryption -v"
+            # baoAuthPath: "kubernetes"
+            # baoRole: "snapshot"
+
   destination:
     server: https://kubernetes.default.svc
     namespace: openbao
