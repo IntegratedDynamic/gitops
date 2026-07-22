@@ -29,6 +29,13 @@ spec:
         - name: {{ .Values.auth.dexServiceName }}
           namespace: {{ .Values.auth.dexServiceNamespace }}
           port: {{ .Values.auth.dexServicePort }}
+      # Also spelled out explicitly (Dex's standard OIDC paths) — the
+      # controller's own admission-time validation fetches
+      # /.well-known/openid-configuration via a plain DNS lookup of `issuer`,
+      # ignoring backendRefs entirely (that field only affects the data-plane
+      # runtime path). Providing both skips that discovery fetch outright.
+      authorizationEndpoint: "{{ .Values.auth.issuer }}/auth"
+      tokenEndpoint: "{{ .Values.auth.issuer }}/token"
     clientID: {{ .Values.auth.clientID | quote }}
     clientSecret:
       name: {{ .Values.auth.clientSecretName }}
