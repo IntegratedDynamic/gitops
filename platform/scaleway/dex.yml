@@ -55,7 +55,10 @@ spec:
           staticClients:
             - id: envoy-gateway
               name: Envoy Gateway
-              secret: "$ENVOY_CLIENT_SECRET"
+              # staticClients has no $VAR expansion (that's connectors/storage
+              # only) — it needs this dedicated secretEnv field instead,
+              # naming the env var (no $ prefix). https://github.com/dexidp/dex/issues/889
+              secretEnv: ENVOY_CLIENT_SECRET
               redirectURIs:
                 # One entry per protected app — see apps/demo/templates/securitypolicy.yaml.
                 - https://demo.scalepack.fr/oauth2/callback
