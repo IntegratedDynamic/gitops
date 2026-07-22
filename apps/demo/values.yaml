@@ -16,3 +16,8 @@ ingress:
   enabled: true
   className: nginx
   host: demo.example.com  # override per environment
+
+# Gateway API routing (scaleway only — see values-scaleway.yaml). Disabled
+# by default so local/other envs keep using the ingress-nginx path above.
+gateway:
+  enabled: false

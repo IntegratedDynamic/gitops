@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gateway-config
+description: The single shared GatewayClass/Gateway/ClusterIssuers apps attach to via HTTPRoute
+type: application
+version: 0.1.0

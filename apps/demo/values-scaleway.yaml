@@ -8,7 +8,13 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-# No ingress controller on the scaleway cluster yet; public exposure is
-# deferred to the API gateway + SSO layer (see issue #3).
+# No ingress-nginx on scaleway — routing goes through the shared Envoy
+# Gateway instead (apps/gateway-config), via HTTPRoute below.
 ingress:
   enabled: false
+
+gateway:
+  enabled: true
+  hostname: demo.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

@@ -1,0 +1,21 @@
+gatewayClassName: envoy-gateway
+gatewayName: scaleway-gateway
+namespace: gateway
+
+# Wildcard covers every current and future subdomain — new apps attach an
+# HTTPRoute for their own hostname and need zero changes here.
+domain: scalepack.fr
+wildcardHostname: "*.scalepack.fr"
+wildcardCertSecretName: scalepack-fr-wildcard-tls
+
+# Which ClusterIssuer the Gateway's TLS listener actually uses. Point at
+# letsencrypt-staging first to prove the DNS01 flow without burning prod
+# rate limits, then flip to letsencrypt-prod.
+activeClusterIssuer: letsencrypt-staging
+# activeClusterIssuer: letsencrypt-prod
+
+acmeEmail: nicolas.brieussel@gmail.com
+
+# Secret apps/cert-manager-webhook-init materializes into the cert-manager
+# namespace (same Scaleway DNS credentials external-dns already uses).
+scalewayCredentialsSecretName: scaleway-dns-credentials

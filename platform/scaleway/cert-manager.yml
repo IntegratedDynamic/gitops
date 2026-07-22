@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+
+  source:
+    repoURL: oci://quay.io/jetstack/charts/cert-manager
+    targetRevision: v1.21.0
+    path: .
+    helm:
+      values: |
+        crds:
+          enabled: true
+
+        # Lets cert-manager watch Gateway API `Gateway` listeners directly
+        # (via the cert-manager.io/cluster-issuer annotation) instead of
+        # requiring a hand-written Certificate per app. ExperimentalGatewayAPISupport
+        # already defaults to true in this chart version; only the controller
+        # loop itself needs enabling.
+        config:
+          apiVersion: controller.config.cert-manager.io/v1alpha1
+          kind: ControllerConfiguration
+          gatewayAPI:
+            enabled: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
