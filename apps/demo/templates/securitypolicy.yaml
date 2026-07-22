@@ -17,6 +17,18 @@ spec:
   oidc:
     provider:
       issuer: {{ .Values.auth.issuer | quote }}
+      # Talks to Dex's in-cluster Service directly instead of resolving
+      # auth.scalepack.fr — avoids depending on external-dns/Scaleway DNS
+      # propagation for discovery/token/JWKS calls (this DNS dependency
+      # caused a real outage: on cluster restart, the Gateway LB IP changes,
+      # and envoy-gateway retried OIDC discovery before the new record had
+      # propagated, permanently wedging the SecurityPolicy in an Invalid
+      # state until manually kicked). `issuer` above still has to match
+      # Dex's own configured issuer for token validation.
+      backendRefs:
+        - name: {{ .Values.auth.dexServiceName }}
+          namespace: {{ .Values.auth.dexServiceNamespace }}
+          port: {{ .Values.auth.dexServicePort }}
     clientID: {{ .Values.auth.clientID | quote }}
     clientSecret:
       name: {{ .Values.auth.clientSecretName }}
