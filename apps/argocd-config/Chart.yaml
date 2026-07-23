@@ -1,0 +1,5 @@
+apiVersion: v2
+name: argocd-config
+description: Materializes ArgoCD's own OIDC client secret from OpenBao and exposes argocd-server on the shared gateway
+type: application
+version: 0.1.0

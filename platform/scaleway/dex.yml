@@ -9,6 +9,20 @@
 # Its redirectURIs list must include every protected app's callback URL —
 # add a line here whenever a new app opts into SSO.
 #
+# staticClients.argocd is a separate client: ArgoCD talks OIDC natively
+# (configs.cm.oidc.config in the infrastructure repo's argocd.tf) instead of
+# going through Envoy Gateway's SecurityPolicy filter, so it needs its own
+# clientID/secret (see apps/argocd-config for the redirectURI's HTTPRoute
+# and the ExternalSecret materializing this secret into argocd's namespace).
+#
+# staticClients.argocd-cli is `argocd login --sso`'s own direct PKCE dance
+# against Dex (bypassing argocd-server entirely, unlike the browser flow
+# above) — it can never know argocd's client secret, so it needs its own
+# public (secret-less) client, wired via configs.cm.oidc.config.cliClientID
+# in the infrastructure repo's argocd.tf. Confirmed live: pointing the CLI
+# at the confidential `argocd` client instead fails with Dex's
+# "invalid_client: Invalid client credentials."
+#
 # Credentials (GitHub client id/secret, the static client secret) come from
 # OpenBao via apps/dex-init, which must sync before this Application's pod
 # can start (same tolerated race as external-dns — ArgoCD selfHeal retries
@@ -62,6 +76,18 @@ spec:
               redirectURIs:
                 # One entry per protected app — see apps/demo/templates/securitypolicy.yaml.
                 - https://demo.scalepack.fr/oauth2/callback
+            - id: argocd
+              name: ArgoCD
+              secretEnv: ARGOCD_CLIENT_SECRET
+              redirectURIs:
+                - https://argocd.scalepack.fr/auth/callback
+            - id: argocd-cli
+              name: ArgoCD CLI
+              public: true
+              redirectURIs:
+                # Fixed port (8085) is the CLI's documented default
+                # (--sso-port to override).
+                - http://localhost:8085/auth/callback
 
         envVars:
           - name: GITHUB_CLIENT_ID
@@ -79,6 +105,11 @@ spec:
               secretKeyRef:
                 name: dex-credentials
                 key: envoy-client-secret
+          - name: ARGOCD_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: argocd-client-secret
 
         resources:
           requests:

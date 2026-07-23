@@ -1,0 +1,31 @@
+enabled: true
+
+namespace: argocd
+
+gateway:
+  hostname: argocd.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
+
+# Service created by the argo-cd chart (helm_release.argocd in the
+# infrastructure repo) — server.insecure is set there, so plain HTTP on
+# this port carries both the UI and the API, same as every other backend
+# behind the gateway.
+argocdServer:
+  serviceName: argocd-server
+  servicePort: 80
+
+# ArgoCD's own OIDC client, registered in platform/scaleway/dex.yml
+# (staticClients.argocd). The secret this ExternalSecret creates is
+# referenced from argocd-cm's oidc.config as
+# $argocd-oidc-client-secret:oidc.clientSecret — see
+# 02-cluster/scaleway/argocd.tf in the infrastructure repo.
+oidcSecret:
+  name: argocd-oidc-client-secret
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/dex/credentials
+
+# PostSync hook that bounces argocd-server once this app's OIDC secret is
+# confirmed present — see templates/restart-hook.yaml for why.
+restartHook:
+  image: registry.k8s.io/kubectl:v1.35.3
