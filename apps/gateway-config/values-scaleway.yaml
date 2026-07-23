@@ -8,11 +8,13 @@ domain: scalepack.fr
 wildcardHostname: "*.scalepack.fr"
 wildcardCertSecretName: scalepack-fr-wildcard-tls
 
-# Which ClusterIssuer the Gateway's TLS listener actually uses. Point at
-# letsencrypt-staging first to prove the DNS01 flow without burning prod
-# rate limits, then flip to letsencrypt-prod.
-activeClusterIssuer: letsencrypt-staging
-# activeClusterIssuer: letsencrypt-prod
+# Which ClusterIssuer the Gateway's TLS listener actually uses. DNS01 flow
+# was proven out on letsencrypt-staging; flipped to prod because strict-TLS
+# clients (ArgoCD's own OIDC discovery fetch to auth.scalepack.fr, unlike
+# Envoy Gateway's SecurityPolicy which talks to Dex's in-cluster Service
+# directly) won't trust a staging-signed cert no matter what's trusted
+# locally on a given machine.
+activeClusterIssuer: letsencrypt-prod
 
 acmeEmail: nicolas.brieussel@gmail.com
 

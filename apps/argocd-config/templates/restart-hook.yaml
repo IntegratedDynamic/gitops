@@ -1,0 +1,48 @@
+{{- if .Values.enabled }}
+# argocd-server (Terraform-managed, starts independently of this chart)
+# races against argocd-oidc-client-secret's own bootstrap: OpenBao +
+# external-secrets + this chart's ExternalSecret all get deployed BY
+# ArgoCD, after argocd-server itself is already running. When the secret
+# first appears (or this chart's OIDC-related config changes), ArgoCD's
+# own settings manager doesn't reliably pick it up — confirmed live,
+# repeatedly, as an intermittent empty-issuer race requiring a manual pod
+# restart to clear. A PostSync hook fixes this at the source: it only
+# runs after every resource in THIS sync (including the ExternalSecret)
+# is Synced/Healthy, so the secret is guaranteed to exist by the time it
+# fires — and it only fires on an actual sync of this Application (fresh
+# bootstrap, or any future change here), not on ArgoCD's routine
+# reconcile loop.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: argocd-config-restart-server
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: argocd-config-restarter
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restart
+          image: {{ .Values.restartHook.image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - kubectl
+            - rollout
+            - restart
+            - deployment/{{ .Values.argocdServer.serviceName }}
+            - -n
+            - {{ .Values.namespace }}
+{{- end }}

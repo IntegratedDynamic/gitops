@@ -1,0 +1,29 @@
+{{- if .Values.enabled }}
+# Scoped to exactly what the restart hook needs: read + patch on the
+# argocd-server Deployment by name, nothing else — not a general grant on
+# Deployments in this namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-config-restarter
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ .Values.argocdServer.serviceName | quote }}]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-config-restarter
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: argocd-config-restarter
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: argocd-config-restarter
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
