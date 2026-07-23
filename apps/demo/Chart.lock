@@ -1,0 +1,6 @@
+dependencies:
+- name: sso-lib
+  repository: file://../_sso-lib
+  version: 0.1.0
+digest: sha256:5c4d1ed6563264311d914cc10708995838386e6c158d335521bfad02b29822e9
+generated: "2026-07-23T10:59:02.332158+02:00"
