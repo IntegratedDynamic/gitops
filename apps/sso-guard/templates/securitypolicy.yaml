@@ -36,3 +36,41 @@ spec:
     redirectURL: "https://{{ .Values.hostname }}/oauth2/callback"
     logoutPath: "/oauth2/logout"
     cookieDomain: {{ .Values.cookieDomain | quote }}
+  {{- if .Values.requiredGroup }}
+    # groups scope + a fixed idToken cookie name so the jwt/authorization
+    # blocks below can read the group claim back out of it.
+    scopes:
+      - groups
+    cookieNames:
+      idToken: {{ .Release.Name }}-id-token
+  # Restricts access to members of one GitHub team (org:team, as Dex's
+  # github connector formats the groups claim) — on top of the org-wide
+  # login gate above. Everything stays in this policy; the app itself
+  # never sees or checks group membership.
+  jwt:
+    providers:
+      - name: dex
+        issuer: {{ .Values.issuer | quote }}
+        remoteJWKS:
+          uri: "{{ .Values.issuer }}/keys"
+          backendRefs:
+            - name: {{ .Values.dexServiceName }}
+              namespace: {{ .Values.dexServiceNamespace }}
+              port: {{ .Values.dexServicePort }}
+        extractFrom:
+          cookies:
+            - {{ .Release.Name }}-id-token
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allow-required-group
+        action: Allow
+        principal:
+          jwt:
+            provider: dex
+            claims:
+              - name: groups
+                valueType: StringArray
+                values:
+                  - {{ .Values.requiredGroup | quote }}
+  {{- end }}

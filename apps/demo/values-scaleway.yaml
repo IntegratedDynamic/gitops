@@ -40,3 +40,6 @@ auth:
   dexServiceName: dex
   dexServiceNamespace: gateway
   dexServicePort: 5556
+  # Restricts demo further to members of this GitHub team (on top of the
+  # org-wide login gate) — see apps/sso-guard/templates/securitypolicy.yaml.
+  requiredGroup: "IntegratedDynamic:Guest"
