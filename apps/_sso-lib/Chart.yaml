@@ -1,5 +1,0 @@
-apiVersion: v2
-name: sso-lib
-description: Shared template gating an app's HTTPRoute behind GitHub org SSO via Dex (SecurityPolicy + ReferenceGrant)
-type: library
-version: 0.1.0

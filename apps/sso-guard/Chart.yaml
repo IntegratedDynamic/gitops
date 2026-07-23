@@ -1,0 +1,5 @@
+apiVersion: v2
+name: sso-guard
+description: Gates the parent app's own HTTPRoute behind GitHub org SSO via Dex (SecurityPolicy + ReferenceGrant)
+type: application
+version: 0.1.0
