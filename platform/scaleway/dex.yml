@@ -23,6 +23,16 @@
 # at the confidential `argocd` client instead fails with Dex's
 # "invalid_client: Invalid client credentials."
 #
+# staticClients.openbao is different again: OpenBao has no app-level "OIDC
+# provider" setting like ArgoCD/Grafana — it's a dedicated JWT/OIDC *auth
+# method* (auth/oidc), configured inside OpenBao itself (bao write
+# auth/oidc/config / auth/oidc/role, applied out-of-band the same way as
+# the rest of OpenBao's internal config — see openbao-claude.md). Both
+# redirect URIs are required: the UI's fixed callback path
+# (/ui/vault/auth/<mount>/oidc/callback, mount = "oidc") and the CLI's
+# default `bao login -method=oidc` callback (localhost:8250). See
+# apps/openbao-config for the HTTPRoute exposing openbao.scalepack.fr.
+#
 # Credentials (GitHub client id/secret, the static client secret) come from
 # OpenBao via apps/dex-init, which must sync before this Application's pod
 # can start (same tolerated race as external-dns — ArgoCD selfHeal retries
@@ -88,6 +98,13 @@ spec:
                 # Fixed port (8085) is the CLI's documented default
                 # (--sso-port to override).
                 - http://localhost:8085/auth/callback
+            - id: openbao
+              name: OpenBao
+              secretEnv: OPENBAO_CLIENT_SECRET
+              redirectURIs:
+                - https://openbao.scalepack.fr/ui/vault/auth/oidc/oidc/callback
+                # `bao login -method=oidc`'s own default local callback port.
+                - http://localhost:8250/oidc/callback
 
         envVars:
           - name: GITHUB_CLIENT_ID
@@ -110,6 +127,11 @@ spec:
               secretKeyRef:
                 name: dex-credentials
                 key: argocd-client-secret
+          - name: OPENBAO_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: openbao-client-secret
 
         resources:
           requests:
