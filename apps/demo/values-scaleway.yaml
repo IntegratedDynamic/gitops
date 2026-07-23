@@ -24,6 +24,10 @@ gateway:
 # staticClients.envoy-gateway.redirectURIs.
 auth:
   enabled: true
+  # Duplicates gateway.hostname above — the sso-guard subchart only sees
+  # this auth: block (Helm scopes subchart values to the parent key
+  # matching its dependency name), not sibling keys like gateway.hostname.
+  hostname: demo.scalepack.fr
   issuer: https://auth.scalepack.fr
   clientID: envoy-gateway
   clientSecretName: demo-sso-client-secret
@@ -32,7 +36,7 @@ auth:
   openbaoPath: apps/dex/credentials
   # Service created by platform/scaleway/dex.yml — referenced directly so
   # OIDC discovery/token calls don't depend on external DNS (see
-  # apps/demo/templates/securitypolicy.yaml).
+  # apps/sso-guard/templates/securitypolicy.yaml).
   dexServiceName: dex
   dexServiceNamespace: gateway
   dexServicePort: 5556

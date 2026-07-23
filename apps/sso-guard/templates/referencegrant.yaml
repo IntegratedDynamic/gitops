@@ -1,0 +1,15 @@
+# Lets the SecurityPolicy above reference Dex's Service across namespaces.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ .Release.Name }}-sso-to-dex
+  namespace: {{ .Values.dexServiceNamespace }}
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
+      namespace: {{ .Release.Namespace }}
+  to:
+    - group: ""
+      kind: Service
+      name: {{ .Values.dexServiceName }}

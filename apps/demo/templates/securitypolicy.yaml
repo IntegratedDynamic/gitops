@@ -1,3 +1,0 @@
-{{- if .Values.auth.enabled }}
-{{ include "sso-lib.protect" (dict "root" $ "auth" (merge (dict "hostname" .Values.gateway.hostname) .Values.auth)) }}
-{{- end }}

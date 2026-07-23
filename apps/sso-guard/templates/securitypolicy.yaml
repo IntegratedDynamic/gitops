@@ -1,0 +1,38 @@
+# Gates the parent app's own HTTPRoute behind GitHub org SSO (via Dex, see
+# platform/scaleway/dex.yml). Envoy Gateway's native OIDC filter requires
+# redirectURL to live on that HTTPRoute's own hostname — one SecurityPolicy
+# per protected app, not a shared policy. .Release.Name/.Release.Namespace
+# here resolve to the PARENT chart's release (subcharts share .Release).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ .Release.Name }}-sso
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ .Release.Name }}
+  oidc:
+    provider:
+      issuer: {{ .Values.issuer | quote }}
+      # Talks to Dex's in-cluster Service directly rather than resolving the
+      # issuer hostname — avoids depending on external-dns/Scaleway DNS
+      # propagation (this caused a real outage on cluster restart: the
+      # Gateway LB IP changes, and envoy-gateway retried OIDC discovery
+      # before the new record propagated, wedging the policy Invalid).
+      backendRefs:
+        - name: {{ .Values.dexServiceName }}
+          namespace: {{ .Values.dexServiceNamespace }}
+          port: {{ .Values.dexServicePort }}
+      # Spelled out explicitly (Dex's standard OIDC paths) so the
+      # controller's admission-time validation skips its own discovery
+      # fetch entirely — that fetch ignores backendRefs and used plain DNS.
+      authorizationEndpoint: "{{ .Values.issuer }}/auth"
+      tokenEndpoint: "{{ .Values.issuer }}/token"
+    clientID: {{ .Values.clientID | quote }}
+    clientSecret:
+      name: {{ .Values.clientSecretName }}
+    redirectURL: "https://{{ .Values.hostname }}/oauth2/callback"
+    logoutPath: "/oauth2/logout"
+    cookieDomain: {{ .Values.cookieDomain | quote }}
