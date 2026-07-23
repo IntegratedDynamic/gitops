@@ -1,0 +1,14 @@
+enabled: true
+
+namespace: openbao
+
+gateway:
+  hostname: openbao.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
+
+# Service created by the openbao-helm chart (platform/scaleway/openbao.yml),
+# release name "openbao" — matches apps/openbao-init's baoAddr.
+openbaoServer:
+  serviceName: openbao
+  servicePort: 8200

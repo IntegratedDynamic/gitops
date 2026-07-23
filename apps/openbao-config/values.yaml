@@ -1,0 +1,3 @@
+# Disabled by default — this chart only makes sense where the shared Dex +
+# gateway exist (scaleway only, see values-scaleway.yaml).
+enabled: false
