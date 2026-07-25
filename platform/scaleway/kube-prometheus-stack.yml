@@ -37,6 +37,24 @@ spec:
               cpu: 750m
               memory: 512Mi
 
+          # Soft anti-affinity against Prometheus — these two are the
+          # heaviest pods in this Application, and having both land on the
+          # same 3-vCPU node is exactly what starved probes/DNS during the
+          # incident above. "Preferred" (not "required"): with only 2 nodes
+          # in this pool, a hard rule would leave Grafana unschedulable
+          # whenever the pool is temporarily down to 1 node.
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values: [prometheus]
+                    topologyKey: kubernetes.io/hostname
+
           # Native OIDC against our shared Dex (platform/scaleway/dex.yml,
           # staticClients.grafana), exposed at grafana.scalepack.fr by
           # apps/grafana-config — mirrors how ArgoCD/OpenBao talk to Dex
@@ -79,6 +97,19 @@ spec:
                 memory: 384Mi
               limits:
                 memory: 768Mi
+            # Mirrors grafana.affinity above — same "preferred, not
+            # required" reasoning (2-node pool).
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                          - key: app.kubernetes.io/name
+                            operator: In
+                            values: [grafana]
+                      topologyKey: kubernetes.io/hostname
             # Uses the Kapsule default StorageClass (Scaleway block storage).
             storageSpec:
               volumeClaimTemplate:
