@@ -6,6 +6,24 @@ The companion infrastructure repository (Terraform + Minikube) bootstraps ArgoCD
 
 ---
 
+## Daily login (quick reference)
+
+Two logins to redo regularly (not one-time setup) — both expire, so run them again
+whenever a command starts failing with an auth error:
+
+```bash
+# Terraform state (S3 backend, infrastructure repo) — needed before any terraform command.
+aws sso login --profile infrastructure
+
+# OpenBao CLI (bao) — needed to read/write secrets directly with `bao kv ...`
+# against the OIDC-gated OpenBao instance this repo deploys (platform/<env>/openbao.yml).
+# Requires BAO_ADDR pointed at the exposed UI (export BAO_ADDR="https://openbao.scalepack.fr/").
+# Token TTL is short (role-dependent, ~1h for the admin role) — relogin when it expires.
+bao login -method=oidc
+```
+
+---
+
 ## How it works
 
 ArgoCD manages itself entirely through this repo via an **App-of-Apps** pattern:
