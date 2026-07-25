@@ -23,6 +23,14 @@
 # at the confidential `argocd` client instead fails with Dex's
 # "invalid_client: Invalid client credentials."
 #
+# staticClients.grafana is another native-OIDC app, same shape as argocd:
+# Grafana's own auth.generic_oauth provider (see
+# platform/scaleway/kube-prometheus-stack.yml) talks to Dex directly, with
+# its role_attribute_path mapping the IntegratedDynamic:Admin group (this
+# same "groups" claim sso-guard already reads) to Grafana's Admin org role,
+# everyone else falling back to Viewer. Secret materialized into the
+# monitoring namespace by apps/grafana-config, mirroring apps/argocd-config.
+#
 # staticClients.openbao is different again: OpenBao has no app-level "OIDC
 # provider" setting like ArgoCD/Grafana — it's a dedicated JWT/OIDC *auth
 # method* (auth/oidc), configured inside OpenBao itself (bao write
@@ -105,6 +113,12 @@ spec:
                 - https://openbao.scalepack.fr/ui/vault/auth/oidc/oidc/callback
                 # `bao login -method=oidc`'s own default local callback port.
                 - http://localhost:8250/oidc/callback
+            - id: grafana
+              name: Grafana
+              secretEnv: GRAFANA_CLIENT_SECRET
+              redirectURIs:
+                # Grafana's fixed generic_oauth callback path.
+                - https://grafana.scalepack.fr/login/generic_oauth
 
         envVars:
           - name: GITHUB_CLIENT_ID
@@ -132,6 +146,11 @@ spec:
               secretKeyRef:
                 name: dex-credentials
                 key: openbao-client-secret
+          - name: GRAFANA_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: grafana-client-secret
 
         resources:
           requests:

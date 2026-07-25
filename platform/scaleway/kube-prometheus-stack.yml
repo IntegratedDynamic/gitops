@@ -17,9 +17,10 @@ spec:
           enabled: false
 
         grafana:
+          # Break-glass fallback, kept intentionally alongside OIDC below
+          # until the GitHub login + role mapping is confirmed live —
+          # see apps/grafana-config.
           adminPassword: admin
-          # ClusterIP for now: reach it via `kubectl port-forward`. Public
-          # exposure + SSO is handled later by the API gateway layer (issue #3).
           service:
             type: ClusterIP
           resources:
@@ -28,6 +29,39 @@ spec:
               memory: 128Mi
             limits:
               memory: 256Mi
+
+          # Native OIDC against our shared Dex (platform/scaleway/dex.yml,
+          # staticClients.grafana), exposed at grafana.scalepack.fr by
+          # apps/grafana-config — mirrors how ArgoCD/OpenBao talk to Dex
+          # natively instead of going through Envoy Gateway's SecurityPolicy.
+          # client_secret comes in via envValueFrom below rather than here,
+          # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
+          grafana.ini:
+            server:
+              root_url: https://grafana.scalepack.fr
+            auth.generic_oauth:
+              enabled: true
+              name: GitHub (Dex)
+              client_id: grafana
+              scopes: "openid profile email groups"
+              auth_url: https://auth.scalepack.fr/auth
+              token_url: https://auth.scalepack.fr/token
+              api_url: https://auth.scalepack.fr/userinfo
+              # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
+              # rbac.policy.csv grants role:admin to — everyone else (no
+              # team, or a different team) falls back to Viewer. NOTE:
+              # several Grafana 11.1/11.2+ GitHub issues report
+              # role_attribute_path sometimes not picking up groups from
+              # the userinfo endpoint — validate this live before relying
+              # on it for anything sensitive (see OIDC.md).
+              role_attribute_path: "contains(groups[*], 'IntegratedDynamic:Admin') && 'Admin' || 'Viewer'"
+              allow_assign_grafana_admin: true
+
+          envValueFrom:
+            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+              secretKeyRef:
+                name: grafana-oidc-client-secret
+                key: client-secret
 
         prometheus:
           prometheusSpec:
