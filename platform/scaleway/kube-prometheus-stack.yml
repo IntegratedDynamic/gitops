@@ -17,12 +17,18 @@ spec:
           enabled: false
 
         grafana:
-          # admin/admin still exists (adminPassword below) but is now
-          # unreachable — disabled once OIDC login + role mapping were
-          # confirmed live, same call as ArgoCD's admin.enabled: false.
-          # To bring it back: drop grafana.ini's [auth]/[auth.basic]
-          # overrides below (or flip disable_login_form/enabled back).
-          adminPassword: admin
+          # auth.basic stays enabled (grafana-sc-dashboard/datasources'
+          # reload calls to Grafana's own API authenticate this same way —
+          # disabling it 401'd them, confirmed live). What actually keeps
+          # this from being a human-usable admin/root account: the
+          # password is randomly generated in OpenBao and never known to
+          # any human (see apps/grafana-config's admin ExternalSecret),
+          # and grafana.ini's disable_login_form below hides the UI form
+          # so OIDC via Dex is the only realistic way in for a person.
+          admin:
+            existingSecret: grafana-admin-credentials
+            userKey: admin-user
+            passwordKey: admin-password
           service:
             type: ClusterIP
           # Grafana 13's bleve-backend search indexer (dashboards/folders/
@@ -67,11 +73,9 @@ spec:
             server:
               root_url: https://grafana.scalepack.fr
             auth:
-              # Closes the admin/admin path entirely (UI form + basic
-              # auth API access) — OIDC via Dex is now the only way in.
+              # Hides the username/password form from the UI — doesn't
+              # touch the API (auth.basic stays enabled, see admin: above).
               disable_login_form: true
-            auth.basic:
-              enabled: false
             auth.generic_oauth:
               enabled: true
               name: GitHub (Dex)

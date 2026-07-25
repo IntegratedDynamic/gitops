@@ -22,3 +22,10 @@ oidcSecret:
   name: grafana-oidc-client-secret
   clusterSecretStoreName: openbao
   openbaoPath: apps/dex/credentials
+
+# Bootstrap admin identity — see templates/externalsecret-admin.yaml for
+# why this exists despite no human being meant to use it.
+adminSecret:
+  name: grafana-admin-credentials
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/grafana/admin
