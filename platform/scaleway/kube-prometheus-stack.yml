@@ -23,12 +23,19 @@ spec:
           adminPassword: admin
           service:
             type: ClusterIP
+          # Grafana 13's bleve-backend search indexer (dashboards/folders/
+          # playlists) burns real CPU continuously, not just at startup —
+          # observed live pegging a full node at ~2 CPU / 94% memory with
+          # the original 50m/128Mi request and no CPU limit, which starved
+          # readiness/liveness probes (SQLite "database is locked" retries)
+          # and coincided with Dex's GitHub calls timing out mid-login.
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
+              cpu: 200m
               memory: 256Mi
+            limits:
+              cpu: 750m
+              memory: 512Mi
 
           # Native OIDC against our shared Dex (platform/scaleway/dex.yml,
           # staticClients.grafana), exposed at grafana.scalepack.fr by
