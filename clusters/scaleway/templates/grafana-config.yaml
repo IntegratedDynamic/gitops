@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana-config
+  namespace: argocd
+  annotations:
+    # Wave 5: its HTTPRoute needs gateway-config's wave-4 Gateway to exist
+    # first (same reasoning as argocd-config/openbao-config). Its
+    # ExternalSecret being this late relative to kube-prometheus-stack
+    # (default wave 0, inside the wave-0 platform app) is fine — Grafana's
+    # pod just stays in CreateContainerConfigError until the Secret shows
+    # up, same tolerated race as dex/external-dns.
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: apps/grafana-config
+    helm:
+      valueFiles:
+        - values-scaleway.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

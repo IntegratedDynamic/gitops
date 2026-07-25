@@ -1,0 +1,24 @@
+enabled: true
+
+namespace: monitoring
+
+gateway:
+  hostname: grafana.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
+
+# Service created by the kube-prometheus-stack chart's bundled grafana
+# subchart (platform/scaleway/kube-prometheus-stack.yml), release name
+# "kube-prometheus-stack" — matches that chart's fullname convention.
+grafanaServer:
+  serviceName: kube-prometheus-stack-grafana
+  servicePort: 80
+
+# Grafana's own OIDC client, registered in platform/scaleway/dex.yml
+# (staticClients.grafana). The secret this ExternalSecret creates is
+# referenced by platform/scaleway/kube-prometheus-stack.yml's
+# grafana.envValueFrom as GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET.
+oidcSecret:
+  name: grafana-oidc-client-secret
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/dex/credentials
