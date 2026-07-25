@@ -8,13 +8,24 @@ domain: scalepack.fr
 wildcardHostname: "*.scalepack.fr"
 wildcardCertSecretName: scalepack-fr-wildcard-tls
 
-# Which ClusterIssuer the Gateway's TLS listener actually uses. DNS01 flow
-# was proven out on letsencrypt-staging; flipped to prod because strict-TLS
-# clients (ArgoCD's own OIDC discovery fetch to auth.scalepack.fr, unlike
-# Envoy Gateway's SecurityPolicy which talks to Dex's in-cluster Service
-# directly) won't trust a staging-signed cert no matter what's trusted
-# locally on a given machine.
-activeClusterIssuer: letsencrypt-prod
+# Which ClusterIssuer the Gateway's TLS listener actually uses.
+#
+# TEMPORARY: flipped back to staging on 2026-07-25 — a full cluster
+# rebuild wipes the scalepack-fr-wildcard-tls Secret, forcing a brand new
+# ACME order on every rebuild even when the previous cert was still
+# valid. Enough rebuilds this week (ArgoCD, OpenBao, Grafana OIDC testing)
+# hit Let's Encrypt's "5 duplicate certs per exact identifier set per
+# 168h" rate limit (retry-after: 2026-07-26 05:49:40 UTC). Flip this back
+# to letsencrypt-prod once that window passes.
+#
+# Known consequence while on staging (confirmed live for ArgoCD, applies
+# identically to OpenBao/Grafana): every native-OIDC app's server-side
+# calls to auth.scalepack.fr (token exchange, userinfo) will fail TLS
+# verification — those pods don't trust the staging CA, unlike a
+# browser that can just click through the warning. Envoy Gateway's own
+# SecurityPolicy.oidc (apps/demo) is unaffected — it talks to Dex's
+# in-cluster Service directly, not through this cert.
+activeClusterIssuer: letsencrypt-staging
 
 acmeEmail: nicolas.brieussel@gmail.com
 
