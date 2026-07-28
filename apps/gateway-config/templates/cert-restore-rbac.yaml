@@ -1,0 +1,37 @@
+# Role/RoleBinding live in the `velero` namespace (where backups/restores
+# actually are), not this chart's own `gateway` namespace — the ServiceAccount
+# stays in `gateway` (see cert-restore-serviceaccount.yaml), only the
+# RoleBinding's own namespace differs, which is all a RoleBinding needs to
+# grant cross-namespace access.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-restore
+  namespace: velero
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-weight: "0"
+rules:
+  - apiGroups: ["velero.io"]
+    resources: ["backups"]
+    verbs: ["list"]
+  - apiGroups: ["velero.io"]
+    resources: ["restores"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-restore
+  namespace: velero
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-weight: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-restore
+subjects:
+  - kind: ServiceAccount
+    name: cert-restore
+    namespace: {{ .Release.Namespace }}
