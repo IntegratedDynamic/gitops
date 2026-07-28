@@ -72,6 +72,15 @@ targets:
     secrets:
       - SCW_ACCESS_KEY
       - SCW_SECRET_KEY
+      # This same round-trip (OpenBao -> ESO -> GitHub env secret) is also
+      # meant to close the CI bootstrap loop for the infra repo's
+      # 05-secrets/<service>/managed roots: each root's AppRole role_id/
+      # secret_id should get merged into its KV object and pushed through
+      # here too, so CI can run `terraform apply` on those roots without a
+      # human re-supplying credentials each time. Not yet wired for
+      # 05-secrets/openbao/managed specifically (only SCW_ACCESS_KEY/
+      # SCW_SECRET_KEY are merged today) — see infra repo's
+      # 05-secrets/openbao/README.md for the full pattern.
 
 # Visibilité des secrets d'organisation créés : "all" ou "private".
 orgSecretVisibility: private

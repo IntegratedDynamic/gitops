@@ -32,3 +32,20 @@ acmeEmail: nicolas.brieussel@gmail.com
 # Secret apps/cert-manager-webhook-init materializes into the cert-manager
 # namespace (same Scaleway DNS credentials external-dns already uses).
 scalewayCredentialsSecretName: scaleway-dns-credentials
+
+# PreSync hook (templates/cert-restore-*.yaml): restores the ACME account key
+# + wildcardCertSecretName above from the latest Velero backup BEFORE this
+# chart's own ClusterIssuers/Gateway get created on a fresh cluster — see
+# those templates for why this has to be a hook on THIS Application rather
+# than a separate wave-ordered one (apps/velero-init, tried first, proved
+# unreliable: a sibling Application's sync-wave doesn't reliably block this
+# one's, confirmed live across two rebuilds with two different root causes).
+certRestore:
+  scheduleName: velero-cert-secrets
+  namespaces:
+    - cert-manager
+    - gateway
+  image:
+    repository: alpine/kubectl
+    tag: "1.35.3"
+    pullPolicy: IfNotPresent
