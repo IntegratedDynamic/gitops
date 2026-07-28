@@ -47,8 +47,13 @@ spec:
                 kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
               }
 
+        # TEMPORARY (feature/openbao-fresh-init-test): no new snapshots while
+        # we validate the fresh-init Terraform flow — restore is also
+        # disabled (apps/openbao-init/values-scaleway.yaml), so a snapshot
+        # taken mid-test would otherwise capture a half-configured instance.
+        # Revert once the test is done.
         snapshotAgent:
-          enabled: true
+          enabled: false
           schedule: "0 * * * *" # Every hours, at 0min.
           s3CredentialsSecret: "scaleway-s3-credentials" 
           config:

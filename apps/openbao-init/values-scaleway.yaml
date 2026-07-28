@@ -1,5 +1,14 @@
 # Local cluster overrides. Mirrors platform/local/openbao.yml snapshotAgent.config
 # so the restore reads from the same bucket the backups are pushed to.
+
+# TEMPORARY (feature/openbao-fresh-init-test): no restore on next boot, so
+# OpenBao comes up as a brand-new, uninitialized instance instead of
+# replaying the last raft snapshot — lets us validate the
+# infrastructure/05-secrets/managed/openbao Terraform flow against a
+# from-scratch OpenBao. Revert once the test is done.
+restore:
+  enabled: false
+
 s3:
   host: s3.fr-par.scw.cloud
   bucket: backup-dev-id
