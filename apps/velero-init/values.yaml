@@ -1,0 +1,24 @@
+# Pulls Scaleway Object Storage credentials from OpenBao into a Secret in the
+# `velero` namespace, reshaped into the AWS shared-config ("cloud") format
+# velero-plugin-for-aws expects. OpenBao stays the source of truth — no
+# credential value ever lives in this repo.
+#
+# The KV entry (keys SCW_ACCESS_KEY / SCW_SECRET_KEY) is managed by Terraform
+# in the infra repo (05-secrets/managed/openbao/main.tf,
+# vault_kv_secret_v2.velero_scaleway_s3_credentials). A SEPARATE IAM key and
+# bucket from OpenBao's own snapshot agent (03-backup/scaleway's
+# scaleway_iam_application.velero / scaleway_object_bucket.velero) — this
+# originally reused OpenBao's, but sharing its bucket broke OpenBao's own
+# `s3cmd`-based retention cleanup (confirmed live 2026-07-28).
+namespace: velero
+
+# ClusterSecretStore declared by the openbao-init chart.
+clusterSecretStoreName: openbao
+
+openbao:
+  path: apps/velero/scaleway-s3-credentials
+
+secret:
+  name: velero-scaleway-credentials
+
+refreshInterval: 1h
