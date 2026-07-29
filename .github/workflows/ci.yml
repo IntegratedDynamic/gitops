@@ -20,19 +20,16 @@ jobs:
           version: "latest"
 
       - name: Lint openbao-init (local values)
-        run: helm lint apps/openbao-init/ -f apps/openbao-init/values-local.yaml
+        run: helm lint services/platform/openbao/init/ -f services/platform/openbao/init/values-local.yaml
 
       - name: Lint openbao-init (scaleway values)
-        run: helm lint apps/openbao-init/ -f apps/openbao-init/values-scaleway.yaml
+        run: helm lint services/platform/openbao/init/ -f services/platform/openbao/init/values-scaleway.yaml
 
       - name: Render bootstrap chart (local)
         run: helm template boot bootstrap/ --set env=local --set revision=main
 
-      - name: Render clusters/local chart
-        run: helm template loc clusters/local/ --set revision=main
-
-      - name: Render clusters/scaleway chart
-        run: helm template loc clusters/scaleway/ --set revision=main
+      - name: Render bootstrap chart (scaleway)
+        run: helm template boot bootstrap/ --set env=scaleway --set revision=main
 
   # ── Job 2: Infisical absent ────────────────────────────────────────────────
   infisical-absent:
@@ -43,7 +40,7 @@ jobs:
 
       - name: Assert no Infisical references in active GitOps manifests
         run: |
-          if git grep -ri infisical apps/ platform/ clusters/ bootstrap/ 2>/dev/null; then
+          if git grep -ri infisical services/ charts/ bootstrap/ 2>/dev/null; then
             echo "ERROR: Infisical references found in GitOps manifests"
             exit 1
           fi

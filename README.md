@@ -26,25 +26,27 @@ bao login -method=oidc
 
 ## How it works
 
-ArgoCD manages itself entirely through this repo via an **App-of-Apps** pattern:
+ArgoCD manages itself entirely through this repo, one directory per service, via two discovery
+mechanisms per cluster instead of a hand-maintained app-of-apps chart:
 
 ```
 [Terraform] ──bootstraps──> bootstrap    (ArgoCD Application)
                                 │
-                                └──watches──> clusters/local/
-                                                    │
-                                          ┌─────────┴──────────┐
-                                          ▼                     ▼
-                                       platform              demo (+ future apps)
-                                          │
-                                    platform/local/
-                                    (ingress-nginx, ...)
+                                └──creates, for env=local──┐
+                                                            │
+                       ┌────────────────────────────────────┴───────────────────────────────┐
+                       ▼                                                                     ▼
+            services-vendor-local                                                 services-app-local
+          (Application, directory recurse)                                          (ApplicationSet)
+                       │                                                                     │
+          watches every services/*/*/applications/local/*.vendor.yaml          expands every services/*/*/applications/local/*.app.yaml
+          and applies it as-is (external Helm charts:                          into a full Application (in-house charts: demo,
+          ingress-nginx, kube-prometheus-stack, openbao...)                    openbao-init, secrets-sync...), injecting repoURL/revision
 ```
 
 - **Terraform** creates a single seed Application called `bootstrap`
-- **`bootstrap`** reads `bootstrap/local.yaml` and creates the `local` Application
-- **`local`** reads `clusters/local/` and creates one Application per file found there
-- Each Application then manages its own resources on the cluster
+- **`bootstrap`** reads `bootstrap/templates/local.yaml`, which creates `services-vendor-local` and `services-app-local` directly (no intermediate `clusters/local/` chart)
+- Each service's own `services/<bucket>/<name>/applications/local/` folder is what "registers" its Applications — nothing outside that folder needs to change to add or remove one
 
 ---
 
@@ -54,36 +56,39 @@ ArgoCD manages itself entirely through this repo via an **App-of-Apps** pattern:
 gitops/
 │
 ├── bootstrap/
-│   └── local.yaml              # "local" ArgoCD Application (watches clusters/local/)
+│   └── templates/local.yaml     # creates services-vendor-local + services-app-local
 │
-├── clusters/
-│   └── local/                  # One directory per cluster environment
-│       ├── demo.yml            # Deploys the demo Helm chart (values-local.yaml)
-│       └── platform.yml        # Deploys platform tools (points to platform/local/)
+├── services/
+│   ├── platform/                # infra: openbao, cert-manager, gateway, dex, monitoring, ...
+│   │   └── openbao/
+│   │       ├── init/            # in-house chart (restore/unseal Job, ClusterSecretStore)
+│   │       │   ├── Chart.yaml
+│   │       │   ├── values.yaml
+│   │       │   ├── values-local.yaml
+│   │       │   └── templates/...
+│   │       └── applications/
+│   │           └── local/
+│   │               ├── chart.vendor.yaml   # loads the openbao-helm chart, as-is
+│   │               └── init.app.yaml       # {name, namespace, chartPath, valueFile, syncWave}
+│   │
+│   └── products/                # revenue-generating apps
+│       └── demo/
+│           ├── chart/            # the demo nginx Helm chart
+│           └── applications/
+│               └── local/app.app.yaml
 │
-├── platform/
-│   └── local/                  # Platform tools for the local cluster
-│       └── ingress-nginx.yml   # ArgoCD Application: ingress-nginx Helm release
-│
-└── apps/
-    └── demo/                   # Helm chart for the demo nginx app
-        ├── Chart.yaml
-        ├── values.yaml         # Default values (production-ish baseline)
-        ├── values-local.yaml   # Local overrides (smaller resources, demo.local host)
-        └── templates/
-            ├── deployment.yaml
-            ├── service.yaml
-            └── ingress.yaml
+└── charts/
+    └── sso-guard/                # shared library chart, consumed as a dependency (not deployed on its own)
 ```
 
 ---
 
-## Adding a new application
+## Adding a new in-house service
 
-1. Create a Helm chart under `apps/<your-app>/`:
+1. Create the Helm chart under `services/<bucket>/<your-service>/<subfolder>/` (`<bucket>` is `platform` for infra, `products` for revenue apps):
 
 ```
-apps/your-app/
+services/products/your-app/chart/
 ├── Chart.yaml
 ├── values.yaml           # sensible defaults, treat as prod baseline
 ├── values-local.yaml     # local overrides
@@ -91,35 +96,18 @@ apps/your-app/
     └── ...
 ```
 
-2. Add an ArgoCD Application in `clusters/local/your-app.yml`:
+2. Register it by adding a params file — no other file to touch:
 
 ```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: your-app
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/IntegratedDynamic/gitops.git
-    targetRevision: main
-    path: apps/your-app
-    helm:
-      valueFiles:
-        - values-local.yaml
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: your-app
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
+# services/products/your-app/applications/local/app.app.yaml
+name: your-app
+namespace: your-app
+chartPath: services/products/your-app/chart
+valueFile: values-local.yaml
+syncWave: "0"
 ```
 
-ArgoCD picks it up automatically — no manual sync needed.
+The `services-app-local` ApplicationSet picks it up automatically — no manual sync needed.
 
 ---
 
@@ -127,40 +115,33 @@ ArgoCD picks it up automatically — no manual sync needed.
 
 Say you're adding `staging`:
 
-1. **Add environment values** for each app that needs overrides:
+1. **Add environment values** for each chart that needs overrides:
    ```
-   apps/demo/values-staging.yaml
-   ```
-
-2. **Add platform tools** for the new cluster:
-   ```
-   platform/staging/ingress-nginx.yml   # e.g. with LoadBalancer instead of NodePort
+   services/products/demo/chart/values-staging.yaml
    ```
 
-3. **Add cluster entry point** in `clusters/staging/`:
+2. **Register every service** that should run on staging, under its own `applications/staging/`:
    ```
-   clusters/staging/demo.yml      # same structure as local, different valueFiles
-   clusters/staging/platform.yml  # points to platform/staging/
-   ```
-
-4. **Add a bootstrap manifest** in `bootstrap/`:
-   ```
-   bootstrap/staging.yaml   # same structure as local.yaml, points to clusters/staging/
+   services/platform/ingress-nginx/applications/staging/chart.vendor.yaml
+   services/products/demo/applications/staging/app.app.yaml
    ```
 
-5. **Point Terraform** (or your cluster provisioner) at `bootstrap/staging.yaml` to seed it.
+3. **Add a bootstrap manifest** in `bootstrap/templates/staging.yaml` — copy `local.yaml`, rename `services-vendor-local`/`services-app-local` to `-staging`, and change the `directory.include` / generator `files.path` glob from `local` to `staging`.
 
-Only the values files and cluster entry points differ — the charts themselves are never duplicated.
+4. **Point Terraform** (or your cluster provisioner) at `bootstrap/` with `env=staging` to seed it.
+
+Only the values files and `applications/staging/` entries differ — the charts themselves are never duplicated.
 
 ---
 
-## Adding a platform tool (e.g. cert-manager)
+## Adding a vendor tool (e.g. cert-manager)
 
-Platform tools are ArgoCD Applications that install Helm charts from external repositories.
-Add a file per tool under `platform/<env>/`:
+Vendor tools are ArgoCD Applications that install Helm charts from external repositories — written as
+a complete, self-contained manifest (no shared template, since these tend to need very different
+things: inline values, `ignoreDifferences`, OCI sources...). Add one file per tool per env:
 
 ```yaml
-# platform/local/cert-manager.yml
+# services/platform/cert-manager/applications/local/chart.vendor.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -186,7 +167,7 @@ spec:
       - CreateNamespace=true
 ```
 
-The `platform` App-of-Apps picks it up automatically.
+The `services-vendor-local` Application (a plain directory-recurse source) picks it up automatically.
 
 ---
 
