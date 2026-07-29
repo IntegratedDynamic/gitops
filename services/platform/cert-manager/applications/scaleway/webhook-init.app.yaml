@@ -4,5 +4,5 @@
 name: cert-manager-webhook-init
 namespace: cert-manager
 chartPath: services/platform/cert-manager/webhook-init
-valueFile: values-scaleway.yaml
+valueFile: values.yaml
 syncWave: "3"

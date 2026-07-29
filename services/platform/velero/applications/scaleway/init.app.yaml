@@ -5,5 +5,5 @@
 name: velero-init
 namespace: velero
 chartPath: services/platform/velero/init
-valueFile: values-scaleway.yaml
+valueFile: values.yaml
 syncWave: "3"
