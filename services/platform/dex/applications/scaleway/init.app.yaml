@@ -6,5 +6,5 @@
 name: dex-init
 namespace: gateway
 chartPath: services/platform/dex/init
-valueFile: values-scaleway.yaml
+valueFile: values.yaml
 syncWave: "5"
