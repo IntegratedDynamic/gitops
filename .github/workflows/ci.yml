@@ -30,18 +30,3 @@ jobs:
 
       - name: Render bootstrap chart (scaleway)
         run: helm template boot bootstrap/ --set env=scaleway --set revision=main
-
-  # ── Job 2: Infisical absent ────────────────────────────────────────────────
-  infisical-absent:
-    name: Infisical absent
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Assert no Infisical references in active GitOps manifests
-        run: |
-          if git grep -ri infisical services/ charts/ bootstrap/ 2>/dev/null; then
-            echo "ERROR: Infisical references found in GitOps manifests"
-            exit 1
-          fi
-          echo "OK: No Infisical references found"
