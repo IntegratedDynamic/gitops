@@ -5,7 +5,7 @@ metadata:
   namespace: argocd
   annotations:
     # Needs cert-manager's CRDs (wave -1). The scaleway-dns-credentials Secret
-    # it reads from is materialized later (wave 3, apps/cert-manager-webhook-init)
+    # it reads from is materialized later (wave 3, services/platform/cert-manager/webhook-init)
     # — same eventual-consistency gap external-dns already tolerates against
     # its own credentials Secret; self-heal picks the pod up once it lands.
     argocd.argoproj.io/sync-wave: "1"

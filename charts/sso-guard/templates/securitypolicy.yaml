@@ -1,5 +1,5 @@
 # Gates the parent app's own HTTPRoute behind GitHub org SSO (via Dex, see
-# platform/scaleway/dex.yml). Envoy Gateway's native OIDC filter requires
+# services/platform/dex/applications/scaleway/chart.vendor.yaml). Envoy Gateway's native OIDC filter requires
 # redirectURL to live on that HTTPRoute's own hostname — one SecurityPolicy
 # per protected app, not a shared policy. .Release.Name/.Release.Namespace
 # here resolve to the PARENT chart's release (subcharts share .Release).
