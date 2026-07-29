@@ -43,6 +43,7 @@ metadata:
   name: services-app-local
   namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - git:
         repoURL: {{ .Values.repoURL }}
