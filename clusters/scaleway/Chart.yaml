@@ -1,5 +1,0 @@
-apiVersion: v2
-name: cluster-scaleway
-description: App-of-apps for the Scaleway (staging) cluster
-type: application
-version: 0.1.0

@@ -1,0 +1,9 @@
+# Wave 3: after openbao-init (wave 2), whose chart declares the
+# ClusterSecretStore this app's ExternalSecret depends on. Same wave as
+# external-dns-init and cert-manager-webhook-init — all three only need
+# that ClusterSecretStore.
+name: velero-init
+namespace: velero
+chartPath: services/platform/velero/init
+valueFile: values-scaleway.yaml
+syncWave: "3"

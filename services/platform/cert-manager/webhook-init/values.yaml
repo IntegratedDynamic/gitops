@@ -1,7 +1,7 @@
 # Reuses the same Scaleway Domains & DNS credentials already synced for
 # external-dns (services/platform/external-dns/init) — same API, same DomainsDNSFullAccess
 # IAM scope, just materialized into the cert-manager namespace too so
-# platform/scaleway/cert-manager-webhook-scaleway.yml and
+# services/platform/cert-manager/applications/scaleway/webhook.vendor.yaml and
 # services/platform/gateway/config's ClusterIssuers can read it. No new OpenBao seed
 # needed.
 namespace: cert-manager

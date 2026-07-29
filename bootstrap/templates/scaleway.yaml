@@ -1,8 +1,13 @@
 {{- if eq .Values.env "scaleway" }}
+# Vendor charts: hand-written Application manifests under
+# services/**/applications/scaleway/*.vendor.yaml, applied as-is (no
+# templating, no shared schema) — one recurse Application per env, re-synced
+# fresh from `revision` on every ArgoCD sync (same trick the old `platform`
+# app-of-apps relied on for revision propagation on inline values).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: scaleway
+  name: services-vendor-scaleway
   namespace: argocd
 spec:
   project: default
@@ -10,13 +15,10 @@ spec:
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.revision }}
-    path: clusters/{{ .Values.env }}
-    helm:
-      parameters:
-        - name: revision
-          value: {{ .Values.revision }}
-        - name: repoURL
-          value: {{ .Values.repoURL }}
+    path: services
+    directory:
+      recurse: true
+      include: "*/*/applications/scaleway/*.vendor.yaml"
 
   destination:
     server: https://kubernetes.default.svc
@@ -26,4 +28,50 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# In-house charts: small param files under
+# services/**/applications/scaleway/*.app.yaml, expanded through this shared
+# template. Needed (instead of the plain recurse above) because these
+# Applications load a chart from THIS repo, so revision/repoURL must be
+# injected — the ApplicationSet template bakes in `revision`/`repoURL` from
+# bootstrap's own Helm values, exactly like the old clusters/scaleway/ chart did.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-app-scaleway
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: {{ .Values.repoURL }}
+        revision: {{ .Values.revision }}
+        files:
+          - path: "services/*/*/applications/scaleway/*.app.yaml"
+  template:
+    metadata:
+      name: '{{ `{{.name}}` }}'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{ `{{.syncWave}}` }}'
+    spec:
+      project: default
+      source:
+        repoURL: {{ .Values.repoURL }}
+        targetRevision: {{ .Values.revision }}
+        path: '{{ `{{.chartPath}}` }}'
+        helm:
+          valueFiles:
+            - '{{ `{{.valueFile}}` }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ `{{.namespace}}` }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
 {{- end }}

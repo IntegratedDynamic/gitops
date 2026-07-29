@@ -22,7 +22,7 @@ spec:
           # disabling it 401'd them, confirmed live). What actually keeps
           # this from being a human-usable admin/root account: the
           # password is randomly generated in OpenBao and never known to
-          # any human (see apps/grafana-config's admin ExternalSecret),
+          # any human (see services/platform/monitoring/grafana-config's admin ExternalSecret),
           # and grafana.ini's disable_login_form below hides the UI form
           # so OIDC via Dex is the only realistic way in for a person.
           admin:
@@ -63,9 +63,9 @@ spec:
                           values: [prometheus]
                     topologyKey: kubernetes.io/hostname
 
-          # Native OIDC against our shared Dex (platform/scaleway/dex.yml,
+          # Native OIDC against our shared Dex (services/platform/dex/applications/scaleway/chart.vendor.yaml,
           # staticClients.grafana), exposed at grafana.scalepack.fr by
-          # apps/grafana-config — mirrors how ArgoCD/OpenBao talk to Dex
+          # services/platform/monitoring/grafana-config — mirrors how ArgoCD/OpenBao talk to Dex
           # natively instead of going through Envoy Gateway's SecurityPolicy.
           # client_secret comes in via envValueFrom below rather than here,
           # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
@@ -85,12 +85,12 @@ spec:
               token_url: https://auth.scalepack.fr/token
               api_url: https://auth.scalepack.fr/userinfo
               # TEMPORARY (fix/gateway-staging-ca): while
-              # apps/gateway-config runs letsencrypt-staging, Grafana's
+              # services/platform/gateway/config runs letsencrypt-staging, Grafana's
               # server-side calls above fail TLS verification against
               # Dex's staging-signed cert ("x509: certificate signed by
               # unknown authority", confirmed live) — the pod's system
               # trust store has no idea about Let's Encrypt's staging CA.
-              # Points at the bundle apps/grafana-config's ConfigMap mounts
+              # Points at the bundle services/platform/monitoring/grafana-config's ConfigMap mounts
               # below. Remove both once back on letsencrypt-prod.
               tls_client_ca: /etc/grafana/certs/letsencrypt-staging/ca-bundle.pem
               # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
@@ -110,7 +110,7 @@ spec:
                 key: client-secret
 
           # TEMPORARY (fix/gateway-staging-ca) — backs tls_client_ca
-          # above. ConfigMap created by apps/grafana-config.
+          # above. ConfigMap created by services/platform/monitoring/grafana-config.
           extraConfigmapMounts:
             - name: letsencrypt-staging-ca
               configMap: letsencrypt-staging-ca

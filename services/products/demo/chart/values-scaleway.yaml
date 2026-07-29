@@ -20,7 +20,7 @@ gateway:
   gatewayNamespace: gateway
 
 # demo is the guinea pig for GitHub org SSO — see services/platform/dex/init and
-# platform/scaleway/dex.yml. Its callback URL is registered in Dex's
+# services/platform/dex/applications/scaleway/chart.vendor.yaml. Its callback URL is registered in Dex's
 # staticClients.envoy-gateway.redirectURIs.
 auth:
   enabled: true
@@ -34,7 +34,7 @@ auth:
   cookieDomain: scalepack.fr
   clusterSecretStoreName: openbao
   openbaoPath: apps/dex/credentials
-  # Service created by platform/scaleway/dex.yml — referenced directly so
+  # Service created by services/platform/dex/applications/scaleway/chart.vendor.yaml — referenced directly so
   # OIDC discovery/token calls don't depend on external DNS (see
   # charts/sso-guard/templates/securitypolicy.yaml).
   dexServiceName: dex

@@ -16,14 +16,14 @@ spec:
           name: scaleway
 
         # gateway-httproute picks up hostnames from HTTPRoutes attached to
-        # the shared Gateway (apps/gateway-config) — needs the Gateway API
+        # the shared Gateway (services/platform/gateway/config) — needs the Gateway API
         # CRDs from gateway-api-crds.yml.
         sources:
           - service
           - gateway-httproute
 
-        # Credentials materialized by apps/external-dns-init from OpenBao
-        # (see clusters/scaleway/templates/external-dns-init.yaml).
+        # Credentials materialized by services/platform/external-dns/init from
+        # OpenBao (see services/platform/external-dns/applications/scaleway/init.app.yaml).
         env:
           - name: SCW_ACCESS_KEY
             valueFrom:

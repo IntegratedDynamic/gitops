@@ -15,7 +15,7 @@ argocdServer:
   serviceName: argocd-server
   servicePort: 80
 
-# ArgoCD's own OIDC client, registered in platform/scaleway/dex.yml
+# ArgoCD's own OIDC client, registered in services/platform/dex/applications/scaleway/chart.vendor.yaml
 # (staticClients.argocd). The secret this ExternalSecret creates is
 # referenced from argocd-cm's oidc.config as
 # $argocd-oidc-client-secret:oidc.clientSecret — see
