@@ -1,0 +1,61 @@
+# Why this is a PreSync hook here, on gateway-config, instead of a
+# separate wave-ordered Application (services/platform/velero/init, the first attempt):
+# ArgoCD's sync-wave ordering across sibling Applications is NOT a hard
+# blocking guarantee — confirmed live across two real cluster rebuilds,
+# each with a different transient failure (a missing OpenBao secret once,
+# a repo-server connectivity blip the next), where gateway-config's own
+# wave-4 sync proceeded anyway while the wave-3 services/platform/velero/init sibling
+# was still stuck. A PreSync hook is different: it's guaranteed *within
+# this Application's own* sync lifecycle — the Gateway/ClusterIssuers
+# below cannot apply until this Job exits 0.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cert-restore
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-weight: "1"
+    # BeforeHookCreation: delete the previous instance (if the last sync's
+    # attempt failed and left it behind) before creating a new one, so a
+    # retry always gets a fresh Job rather than erroring on immutable
+    # fields. HookSucceeded: also clean up after a successful run.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cert-restore
+        component: restore
+    spec:
+      serviceAccountName: cert-restore
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: "{{ .Values.certRestore.image.repository }}:{{ .Values.certRestore.image.tag }}"
+          imagePullPolicy: {{ .Values.certRestore.image.pullPolicy }}
+          command: ["sh", "/scripts/restore.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: SCHEDULE_NAME
+              value: {{ .Values.certRestore.scheduleName | quote }}
+            - name: RESTORE_NAMESPACES
+              value: "{{ join "," .Values.certRestore.namespaces }}"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: cert-restore
