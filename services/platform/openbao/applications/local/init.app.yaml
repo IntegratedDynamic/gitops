@@ -1,0 +1,11 @@
+# Wave 0 (parallel with chart.vendor.yaml, NOT after it): on a from-scratch
+# cluster openbao starts uninitialized -> sealed -> 0/1 NotReady -> the vendor
+# Application never reaches Healthy until restored. Gating this behind the
+# vendor chart's health would deadlock. Running in parallel lets the restore
+# job initialize openbao while it is still 0/1 (the openbao Service publishes
+# not-ready addresses).
+name: openbao-init
+namespace: openbao
+chartPath: services/platform/openbao/init
+valueFile: values-local.yaml
+syncWave: "0"
