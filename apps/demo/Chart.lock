@@ -1,6 +1,0 @@
-dependencies:
-- name: sso-guard
-  repository: file://../sso-guard
-  version: 0.1.0
-digest: sha256:deac9c991e8900ab8d8c5f3088df51f593043f9e02d83d2d90b33bf32568639e
-generated: "2026-07-23T11:05:15.456707+02:00"

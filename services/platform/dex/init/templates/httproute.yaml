@@ -1,0 +1,22 @@
+# Exposes Dex itself at auth.scalepack.fr — Dex owns this host entirely
+# (discovery/JWKS/authorization/token endpoints, its own /callback from
+# GitHub, and the sign-in UI). Each protected app's OIDC callback lives on
+# that app's OWN hostname instead (see services/products/demo/chart/templates/securitypolicy.yaml)
+# — Envoy Gateway's native OIDC filter requires the redirectURL to match the
+# protected HTTPRoute's own host, a shared callback host isn't supported.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dex
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.gatewayName }}
+      namespace: {{ .Values.gateway.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    - {{ .Values.gateway.hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ .Values.dex.serviceName }}
+          port: {{ .Values.dex.servicePort }}

@@ -1,0 +1,51 @@
+gatewayClassName: envoy-gateway
+gatewayName: scaleway-gateway
+namespace: gateway
+
+# Wildcard covers every current and future subdomain — new apps attach an
+# HTTPRoute for their own hostname and need zero changes here.
+domain: scalepack.fr
+wildcardHostname: "*.scalepack.fr"
+wildcardCertSecretName: scalepack-fr-wildcard-tls
+
+# Which ClusterIssuer the Gateway's TLS listener actually uses.
+#
+# TEMPORARY: flipped back to staging on 2026-07-25 — a full cluster
+# rebuild wipes the scalepack-fr-wildcard-tls Secret, forcing a brand new
+# ACME order on every rebuild even when the previous cert was still
+# valid. Enough rebuilds this week (ArgoCD, OpenBao, Grafana OIDC testing)
+# hit Let's Encrypt's "5 duplicate certs per exact identifier set per
+# 168h" rate limit (retry-after: 2026-07-26 05:49:40 UTC). Flip this back
+# to letsencrypt-prod once that window passes.
+#
+# Known consequence while on staging (confirmed live for ArgoCD, applies
+# identically to OpenBao/Grafana): every native-OIDC app's server-side
+# calls to auth.scalepack.fr (token exchange, userinfo) will fail TLS
+# verification — those pods don't trust the staging CA, unlike a
+# browser that can just click through the warning. Envoy Gateway's own
+# SecurityPolicy.oidc (services/products/demo/chart) is unaffected — it talks to Dex's
+# in-cluster Service directly, not through this cert.
+activeClusterIssuer: letsencrypt-staging
+
+acmeEmail: nicolas.brieussel@gmail.com
+
+# Secret services/platform/cert-manager/webhook-init materializes into the cert-manager
+# namespace (same Scaleway DNS credentials external-dns already uses).
+scalewayCredentialsSecretName: scaleway-dns-credentials
+
+# PreSync hook (templates/cert-restore-*.yaml): restores the ACME account key
+# + wildcardCertSecretName above from the latest Velero backup BEFORE this
+# chart's own ClusterIssuers/Gateway get created on a fresh cluster — see
+# those templates for why this has to be a hook on THIS Application rather
+# than a separate wave-ordered one (services/platform/velero/init, tried first, proved
+# unreliable: a sibling Application's sync-wave doesn't reliably block this
+# one's, confirmed live across two rebuilds with two different root causes).
+certRestore:
+  scheduleName: velero-cert-secrets
+  namespaces:
+    - cert-manager
+    - gateway
+  image:
+    repository: alpine/kubectl
+    tag: "1.35.3"
+    pullPolicy: IfNotPresent

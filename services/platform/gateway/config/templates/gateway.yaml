@@ -1,0 +1,33 @@
+# The one and only Gateway resource for this cluster. Envoy Gateway
+# provisions one Scaleway LoadBalancer Service per Gateway object — do NOT
+# add a second Gateway here or anywhere else; every app attaches to this one
+# via its own HTTPRoute (see services/products/demo/chart/templates/httproute.yaml) instead.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    # cert-manager's Gateway API shim watches this and auto-issues/renews
+    # the wildcard cert into wildcardCertSecretName below.
+    cert-manager.io/cluster-issuer: {{ .Values.activeClusterIssuer }}
+spec:
+  gatewayClassName: {{ .Values.gatewayClassName }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ .Values.wildcardHostname | quote }}
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ .Values.wildcardCertSecretName }}

@@ -1,0 +1,5 @@
+name: secrets-sync
+namespace: secrets-sync
+chartPath: services/platform/secrets-sync/config
+valueFile: values-local.yaml
+syncWave: "0"
