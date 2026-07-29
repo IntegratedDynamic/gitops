@@ -1,13 +1,13 @@
 {{- if .Values.enabled }}
 # Exposes the Grafana UI at grafana.scalepack.fr on the shared gateway.
 # Grafana authenticates natively via its own auth.generic_oauth provider
-# (platform/scaleway/kube-prometheus-stack.yml) rather than going through
+# (services/platform/monitoring/applications/scaleway/chart.vendor.yaml) rather than going through
 # Envoy Gateway's SecurityPolicy filter (charts/sso-guard) — same reasoning
 # as services/platform/argocd-config/config / services/platform/openbao/config: Grafana's own login page and
 # /login/generic_oauth callback need to be reachable before any session
 # exists, and a blanket edge gate fights that handshake. The local
 # admin/admin login stays enabled as a break-glass fallback for now (see
-# platform/scaleway/kube-prometheus-stack.yml).
+# services/platform/monitoring/applications/scaleway/chart.vendor.yaml).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

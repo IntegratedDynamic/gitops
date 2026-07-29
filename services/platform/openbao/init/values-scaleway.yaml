@@ -1,4 +1,4 @@
-# Local cluster overrides. Mirrors platform/local/openbao.yml snapshotAgent.config
+# Local cluster overrides. Mirrors services/platform/openbao/applications/local/chart.vendor.yaml snapshotAgent.config
 # so the restore reads from the same bucket the backups are pushed to.
 s3:
   host: s3.fr-par.scw.cloud

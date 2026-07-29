@@ -1,9 +1,10 @@
-# Cluster environment to bootstrap; selects clusters/<env> and the matching
-# bootstrap/templates/<env>.yaml. Set by the external provisioner (e.g. the
-# Terraform infra repo).
+# Cluster environment to bootstrap; selects bootstrap/templates/<env>.yaml,
+# which creates that env's services-vendor-<env> Application and
+# services-app-<env> ApplicationSet. Set by the external provisioner (e.g.
+# the Terraform infra repo).
 #
-# TODO(validation): enforce the expected 1:1 relation between
-# bootstrap/templates/<env>.yaml and clusters/<env>/ (as a PR check).
+# TODO(validation): enforce that every services/**/applications/<env>/
+# folder referenced by an env actually exists (as a PR check).
 env: local
 
 # Git ref this cluster tracks. Propagated down to every child Application so a

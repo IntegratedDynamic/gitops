@@ -1,0 +1,7 @@
+# Wave 5: its HTTPRoute needs gateway-config's wave-4 Gateway to exist first
+# (same reasoning as demo/dex-init).
+name: argocd-config
+namespace: argocd
+chartPath: services/platform/argocd-config/config
+valueFile: values-scaleway.yaml
+syncWave: "5"

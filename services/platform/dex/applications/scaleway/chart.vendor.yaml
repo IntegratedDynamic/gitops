@@ -5,14 +5,14 @@
 # with the rest of this cluster.
 #
 # staticClients.envoy-gateway is the one OAuth2 client every protected app's
-# SecurityPolicy authenticates against (see apps/demo/templates/securitypolicy.yaml).
+# SecurityPolicy authenticates against (see services/products/demo/chart/templates/securitypolicy.yaml).
 # Its redirectURIs list must include every protected app's callback URL —
 # add a line here whenever a new app opts into SSO.
 #
 # staticClients.argocd is a separate client: ArgoCD talks OIDC natively
 # (configs.cm.oidc.config in the infrastructure repo's argocd.tf) instead of
 # going through Envoy Gateway's SecurityPolicy filter, so it needs its own
-# clientID/secret (see apps/argocd-config for the redirectURI's HTTPRoute
+# clientID/secret (see services/platform/argocd-config/config for the redirectURI's HTTPRoute
 # and the ExternalSecret materializing this secret into argocd's namespace).
 #
 # staticClients.argocd-cli is `argocd login --sso`'s own direct PKCE dance
@@ -25,11 +25,11 @@
 #
 # staticClients.grafana is another native-OIDC app, same shape as argocd:
 # Grafana's own auth.generic_oauth provider (see
-# platform/scaleway/kube-prometheus-stack.yml) talks to Dex directly, with
+# services/platform/monitoring/applications/scaleway/chart.vendor.yaml) talks to Dex directly, with
 # its role_attribute_path mapping the IntegratedDynamic:Admin group (this
 # same "groups" claim sso-guard already reads) to Grafana's Admin org role,
 # everyone else falling back to Viewer. Secret materialized into the
-# monitoring namespace by apps/grafana-config, mirroring apps/argocd-config.
+# monitoring namespace by services/platform/monitoring/grafana-config, mirroring services/platform/argocd-config/config.
 #
 # staticClients.openbao is different again: OpenBao has no app-level "OIDC
 # provider" setting like ArgoCD/Grafana — it's a dedicated JWT/OIDC *auth
@@ -39,10 +39,10 @@
 # redirect URIs are required: the UI's fixed callback path
 # (/ui/vault/auth/<mount>/oidc/callback, mount = "oidc") and the CLI's
 # default `bao login -method=oidc` callback (localhost:8250). See
-# apps/openbao-config for the HTTPRoute exposing openbao.scalepack.fr.
+# services/platform/openbao/config for the HTTPRoute exposing openbao.scalepack.fr.
 #
 # Credentials (GitHub client id/secret, the static client secret) come from
-# OpenBao via apps/dex-init, which must sync before this Application's pod
+# OpenBao via services/platform/dex/init, which must sync before this Application's pod
 # can start (same tolerated race as external-dns — ArgoCD selfHeal retries
 # until the Secret exists).
 apiVersion: argoproj.io/v1alpha1
@@ -92,7 +92,7 @@ spec:
               # naming the env var (no $ prefix). https://github.com/dexidp/dex/issues/889
               secretEnv: ENVOY_CLIENT_SECRET
               redirectURIs:
-                # One entry per protected app — see apps/demo/templates/securitypolicy.yaml.
+                # One entry per protected app — see services/products/demo/chart/templates/securitypolicy.yaml.
                 - https://demo.scalepack.fr/oauth2/callback
             - id: argocd
               name: ArgoCD
