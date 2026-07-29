@@ -10,22 +10,18 @@ wildcardCertSecretName: scalepack-fr-wildcard-tls
 
 # Which ClusterIssuer the Gateway's TLS listener actually uses.
 #
-# TEMPORARY: flipped back to staging on 2026-07-25 — a full cluster
-# rebuild wipes the scalepack-fr-wildcard-tls Secret, forcing a brand new
-# ACME order on every rebuild even when the previous cert was still
-# valid. Enough rebuilds this week (ArgoCD, OpenBao, Grafana OIDC testing)
-# hit Let's Encrypt's "5 duplicate certs per exact identifier set per
-# 168h" rate limit (retry-after: 2026-07-26 05:49:40 UTC). Flip this back
-# to letsencrypt-prod once that window passes.
-#
-# Known consequence while on staging (confirmed live for ArgoCD, applies
-# identically to OpenBao/Grafana): every native-OIDC app's server-side
-# calls to auth.scalepack.fr (token exchange, userinfo) will fail TLS
-# verification — those pods don't trust the staging CA, unlike a
-# browser that can just click through the warning. Envoy Gateway's own
-# SecurityPolicy.oidc (services/products/demo/chart) is unaffected — it talks to Dex's
-# in-cluster Service directly, not through this cert.
-activeClusterIssuer: letsencrypt-staging
+# Back on prod as of 2026-07-29: the 2026-07-25 staging flip was to dodge
+# Let's Encrypt's "5 duplicate certs per exact identifier set per 168h"
+# rate limit, since a full cluster rebuild used to wipe the
+# scalepack-fr-wildcard-tls Secret and force a brand new ACME order every
+# time. `certRestore` below (cert-restore-job.yaml, PreSync hook) now
+# restores that Secret + the ACME account key from the velero-cert-secrets
+# Velero schedule before this chart's ClusterIssuers/Gateway are created —
+# confirmed live 2026-07-29 (see config/README.md) — so a rebuild reuses
+# the existing prod cert instead of re-issuing. If prod ever needs to go
+# back to staging, restore the comment from git history (commit 66b6438)
+# for the full rationale and the native-OIDC TLS-verification caveat.
+activeClusterIssuer: letsencrypt-prod
 
 acmeEmail: nicolas.brieussel@gmail.com
 
