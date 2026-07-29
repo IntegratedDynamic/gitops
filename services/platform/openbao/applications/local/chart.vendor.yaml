@@ -63,6 +63,18 @@ spec:
             s3cmdExtraFlag: "--server-side-encryption -v"
             # baoAuthPath: "kubernetes"
             # baoRole: "snapshot"
+
+  # The agent-injector's MutatingWebhookConfiguration gets its caBundle
+  # injected at runtime by the chart's own cert-generation, which never
+  # matches whatever's (or isn't) in git — standard ArgoCD pattern for any
+  # self-signed webhook cert. See "the case of injected CA bundles":
+  # https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
+
   destination:
     server: https://kubernetes.default.svc
     namespace: openbao
