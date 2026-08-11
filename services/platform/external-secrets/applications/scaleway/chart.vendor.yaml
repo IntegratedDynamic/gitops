@@ -12,6 +12,36 @@ spec:
     repoURL: https://external-secrets.io
     chart: external-secrets
     targetRevision: 2.6.0
+    helm:
+      values: |
+        # Chart ships resources: {} by default for every component. See
+        # cert-manager/applications/scaleway/chart.vendor.yaml's comment on
+        # the same fix — without this, the scheduler can't balance the
+        # cluster's 2 nodes and Cluster Autoscaler never gets a reason to
+        # use the pool's 3rd node.
+        resources:
+          requests:
+            cpu: 25m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        webhook:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+        certController:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
 
   destination:
     server: https://kubernetes.default.svc

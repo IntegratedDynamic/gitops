@@ -24,6 +24,16 @@ spec:
         secret:
           externalSecretName: scaleway-dns-credentials
 
+        # See cert-manager/applications/scaleway/chart.vendor.yaml's comment
+        # on the same fix — this chart also ships resources: {} by default.
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager

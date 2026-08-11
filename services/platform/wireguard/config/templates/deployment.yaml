@@ -45,6 +45,7 @@ spec:
                 printf "\n# %s\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\n" "$name" "$pubkey" "$allowedips" >> /config/wg_confs/wg0.conf
               done
               chmod 600 /config/wg_confs/wg0.conf
+          resources: {{ .Values.resources.renderConf | toYaml | nindent 12 }}
           volumeMounts:
             - name: conf-template
               mountPath: /template
@@ -63,6 +64,7 @@ spec:
           securityContext:
             capabilities:
               add: ["NET_ADMIN"]
+          resources: {{ .Values.resources.wireguard | toYaml | nindent 12 }}
           env:
             - name: PUID
               value: "1000"
@@ -97,6 +99,7 @@ spec:
               set -eu
               apk add --no-cache socat
               exec socat TCP-LISTEN:{{ $proxyTarget.port }},fork,reuseaddr TCP:{{ $proxyTarget.target }}
+          resources: {{ $.Values.resources.proxy | toYaml | nindent 12 }}
         {{- end }}
         # Raw TCP passthrough to Envoy Gateway's own real Service — SNI/Host
         # travel untouched inside the TLS ClientHello, so Envoy does its
@@ -124,6 +127,7 @@ spec:
               socat TCP-LISTEN:443,fork,reuseaddr TCP:${TARGET}:443 &
               socat TCP-LISTEN:80,fork,reuseaddr TCP:${TARGET}:80 &
               wait
+          resources: {{ .Values.resources.proxy | toYaml | nindent 12 }}
         # Split DNS: answers *.scalepack.fr with this pod's own tunnel
         # address (server.address, stripped of its CIDR suffix) and
         # forwards everything else upstream. Peers get this pushed via
@@ -144,6 +148,7 @@ spec:
                 --address=/{{ .Values.dnsZone }}/{{ (splitList "/" .Values.server.address) | first }} \
                 --server=1.1.1.1 --server=8.8.8.8 \
                 --port=53
+          resources: {{ .Values.resources.dns | toYaml | nindent 12 }}
       volumes:
         - name: conf-template
           configMap:
