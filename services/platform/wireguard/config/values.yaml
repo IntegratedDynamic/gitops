@@ -97,7 +97,18 @@ proxyTargets: {}
 # template). Confirmed live 2026-08-11 alongside every other requestless
 # platform chart — see cert-manager/applications/scaleway/chart.vendor.yaml's
 # comment for the full incident. Every container here is a thin proxy/init
-# step, so these all stay small.
+# step, so these all stay small — except where noted below.
+#
+# dns and proxyGateway both got OOMKilled at their original 32Mi limit
+# during a live relaunch (2026-08-11): every container here runs `apk
+# add --no-cache <pkg>` fresh at startup (nothing's baked into the base
+# alpine image), and that package-fetch/install step spikes well above
+# what the actual running process needs afterwards — confirmed live for
+# proxyGateway specifically, observed at 31Mi against a 32Mi limit right
+# after startup. proxyGateway also gets its own tier instead of sharing
+# "proxy": it runs on alpine/kubectl (bundles the kubectl binary), a
+# heavier base image than the plain alpine the generic per-target proxy
+# sidecars use.
 resources:
   renderConf:
     requests:
@@ -119,11 +130,18 @@ resources:
       memory: 8Mi
     limits:
       cpu: 50m
+      memory: 64Mi
+  proxyGateway:
+    requests:
+      cpu: 10m
       memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
   dns:
     requests:
       cpu: 5m
       memory: 16Mi
     limits:
       cpu: 50m
-      memory: 32Mi
+      memory: 128Mi
