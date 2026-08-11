@@ -127,7 +127,7 @@ spec:
               socat TCP-LISTEN:443,fork,reuseaddr TCP:${TARGET}:443 &
               socat TCP-LISTEN:80,fork,reuseaddr TCP:${TARGET}:80 &
               wait
-          resources: {{ .Values.resources.proxy | toYaml | nindent 12 }}
+          resources: {{ .Values.resources.proxyGateway | toYaml | nindent 12 }}
         # Split DNS: answers *.scalepack.fr with this pod's own tunnel
         # address (server.address, stripped of its CIDR suffix) and
         # forwards everything else upstream. Peers get this pushed via
