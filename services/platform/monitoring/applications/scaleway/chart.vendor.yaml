@@ -151,33 +151,18 @@ spec:
         # DaemonSet pods are pinned to one specific node each (nodeAffinity
         # on that node's own name) — unlike a Deployment pod, they can't
         # just get scheduled on the other node if this one is full, and
-        # unschedulable and Cluster Autoscaler adding a 3rd node doesn't
-        # rescue them either, since that node's own copy is bound to a node
-        # that already exists. Confirmed live 2026-08-11: node-exporter sat
+        # Cluster Autoscaler adding a 3rd node doesn't rescue them either,
+        # since the pod that needs scheduling is bound to a node that
+        # already exists. Confirmed live 2026-08-11: node-exporter sat
         # Pending for minutes on a node running at ~99% requested memory,
-        # because at default priority (0) it can't preempt anything to make
-        # room for itself — every other Scaleway-managed DaemonSet here
-        # (cilium, csi-node, konnectivity-agent, kube-proxy) already runs
-        # system-node-critical/system-cluster-critical and would have
-        # preempted a regular pod without hesitation. node-exporter isn't
-        # actually node-critical (the node functions fine without it, it
-        # just goes dark in Grafana), so it gets its own mid-tier
-        # PriorityClass instead of borrowing the system-reserved ones.
-        extraManifests:
-          - apiVersion: scheduling.k8s.io/v1
-            kind: PriorityClass
-            metadata:
-              name: node-daemonset
-            value: 1000000
-            globalDefault: false
-            description: >-
-              For DaemonSets that need to preempt regular pods to guarantee
-              their one-per-node placement, without claiming the
-              system-node-critical/system-cluster-critical tiers reserved
-              for infra the node can't function without.
-
+        # because at default priority (0) it couldn't preempt anything to
+        # make room for itself. Every other DaemonSet on this cluster
+        # (cilium, csi-node, konnectivity-agent, kube-proxy — all
+        # Scaleway-managed) already runs system-node-critical/
+        # system-cluster-critical, so node-exporter reuses the same
+        # built-in tier rather than inventing a dedicated one.
         prometheus-node-exporter:
-          priorityClassName: node-daemonset
+          priorityClassName: system-node-critical
           resources:
             requests:
               cpu: 20m
