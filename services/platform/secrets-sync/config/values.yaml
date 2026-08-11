@@ -72,6 +72,7 @@ targets:
     secrets:
       - SCW_ACCESS_KEY
       - SCW_SECRET_KEY
+      - WG_CI_PRIVATE_KEY
       # This same round-trip (OpenBao -> ESO -> GitHub env secret) is also
       # meant to close the CI bootstrap loop for the infra repo's
       # 05-secrets/<service>/managed roots: each root's AppRole role_id/
@@ -79,8 +80,19 @@ targets:
       # here too, so CI can run `terraform apply` on those roots without a
       # human re-supplying credentials each time. Not yet wired for
       # 05-secrets/openbao/managed specifically (only SCW_ACCESS_KEY/
-      # SCW_SECRET_KEY are merged today) — see infra repo's
-      # 05-secrets/openbao/README.md for the full pattern.
+      # SCW_SECRET_KEY/WG_CI_PRIVATE_KEY are merged today) — see infra
+      # repo's 05-secrets/openbao/README.md for the full pattern.
+      #
+      # WG_CI_PRIVATE_KEY: CI's own WireGuard peer key (infra repo's
+      # 04-vpn/wireguard's peer_private_keys["ci-github-actions"]
+      # output) — brings up the tunnel to OpenBao's ClusterIP before
+      # `terraform plan/apply` on 05-secrets/openbao/{bootstrap,managed}.
+      # Merged into THIS same kv/apps/secrets-sync/github/infrastructure-scaleway
+      # object (not a separate kv/apps/wireguard/* one — nothing but this
+      # target's own pipeline would ever read that): supplied straight into
+      # 05-secrets/openbao/managed's local.auto.tfvars from
+      # 04-vpn/wireguard's output, same as every other
+      # externally-issued credential on that root.
 
 # Visibilité des secrets d'organisation créés : "all" ou "private".
 orgSecretVisibility: private
