@@ -47,10 +47,44 @@ spec:
                 kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
               }
 
+          # Chart ships resources: {} by default. See
+          # cert-manager/applications/scaleway/chart.vendor.yaml's comment on
+          # the same fix. OpenBao backs every other app's secrets in this
+          # cluster (including its own snapshotAgent below), so it gets the
+          # most headroom of anything here — raft compaction and unseal both
+          # spike above steady-state usage.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+        injector:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
         snapshotAgent:
           enabled: true
           schedule: "0 * * * *" # Every hours, at 0min.
-          s3CredentialsSecret: "scaleway-s3-credentials" 
+          s3CredentialsSecret: "scaleway-s3-credentials"
+          # Runs as its own CronJob (not a sidecar in the server pod) — a
+          # short-lived s3cmd export, so it gets a low request but a limit
+          # well above it: same "bursty tool, generous limit" reasoning as
+          # monitoring/applications/scaleway/chart.vendor.yaml's grafana/prometheus comment.
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
           config:
             s3Host: "s3.fr-par.scw.cloud"
             s3Bucket: "backup-dev-id"

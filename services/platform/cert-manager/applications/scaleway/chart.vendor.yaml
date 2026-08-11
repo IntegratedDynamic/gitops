@@ -28,6 +28,47 @@ spec:
           gatewayAPI:
             enabled: true
 
+        # Chart ships none of these by default (resources: {} everywhere) —
+        # confirmed live 2026-08-11: with every platform chart requestless,
+        # the scheduler has nothing to balance nodes on and Cluster
+        # Autoscaler never sees a reason to use the pool's 3rd node, so a
+        # fresh scaleway-homelab boot piles ~30 pods onto one 2-node's worth
+        # of real RAM and OOMs. cainjector gets the most headroom: it watches
+        # every CRD/webhook/APIService in the cluster to inject CA bundles,
+        # so its memory scales with total CRD count and spikes hardest during
+        # the initial sync right after cert-manager's own CRDs land.
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        webhook:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+        cainjector:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+        startupapicheck:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager

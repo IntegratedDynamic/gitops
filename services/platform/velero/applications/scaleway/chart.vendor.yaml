@@ -97,6 +97,21 @@ spec:
               includedResources:
                 - secrets
 
+        # Chart ships resources: {} by default (its own commented-out example
+        # suggests 500m/128Mi request, 1000m/512Mi limit — scaled down here
+        # since this instance's backup scope is a handful of Secrets, not
+        # volumes). See cert-manager/applications/scaleway/chart.vendor.yaml's
+        # comment on the same fix. Limit stays well above request: backup
+        # runs (listing/serializing API objects) spike above the idle
+        # footprint the rest of the time.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+
   destination:
     server: https://kubernetes.default.svc
     namespace: velero
