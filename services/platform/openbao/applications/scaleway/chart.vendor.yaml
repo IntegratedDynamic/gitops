@@ -52,11 +52,13 @@ spec:
           # the same fix. OpenBao backs every other app's secrets in this
           # cluster (including its own snapshotAgent below), so it gets the
           # most headroom of anything here — raft compaction and unseal both
-          # spike above steady-state usage.
+          # spike above steady-state usage. Request sized from `kubectl top
+          # pods -n openbao` (2026-08-11, observed 49-62m/113Mi); limit kept
+          # well above that for the compaction/unseal spikes above.
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 160Mi
             limits:
               cpu: 500m
               memory: 512Mi
@@ -64,7 +66,7 @@ spec:
         injector:
           resources:
             requests:
-              cpu: 25m
+              cpu: 10m
               memory: 32Mi
             limits:
               cpu: 100m

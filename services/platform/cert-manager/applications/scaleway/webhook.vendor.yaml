@@ -26,13 +26,15 @@ spec:
 
         # See cert-manager/applications/scaleway/chart.vendor.yaml's comment
         # on the same fix — this chart also ships resources: {} by default.
+        # Sized from `kubectl top pods` (2026-08-11): a first pass guessed
+        # 16Mi here against an actual observed ~45Mi, nearly 3x under.
         resources:
           requests:
             cpu: 10m
-            memory: 16Mi
-          limits:
-            cpu: 50m
             memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
 
   destination:
     server: https://kubernetes.default.svc
