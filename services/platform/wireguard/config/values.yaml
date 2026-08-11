@@ -1,0 +1,93 @@
+# A self-hosted WireGuard tunnel so infra repo's 05-secrets/openbao's vault
+# provider (local dev + CI) can reach OpenBao instead of the public gateway
+# route (openbao.scalepack.fr) — that route stays public for a different,
+# unrelated reason: OpenBao's own native OIDC/UI login for humans
+# (services/platform/openbao/config), which this domain doesn't touch. No
+# third-party control plane (Tailscale evaluated, ruled out) — see infra
+# repo's 04-vpn/wireguard/README.md for the full design and where every
+# key in this chart's values actually comes from.
+#
+# This pod terminates the tunnel and proxies to each target in
+# proxyTargets below at the application layer (see templates/deployment.yaml,
+# one sidecar container per entry) rather than routing/NAT-ing at the kernel
+# layer — a first attempt used net.ipv4.ip_forward + iptables MASQUERADE,
+# which needs the node pool's kubelet to allowlist those as "unsafe
+# sysctls". Confirmed live 2026-08-09 that's a dead end twice over:
+# Scaleway's kubelet_args API rejects widening that allowlist for this
+# cluster's k8s version at all, and even where it is available, it's a
+# cluster-wide relaxation for one workload's benefit — worth avoiding on
+# its own merits. The proxy needs none of that: a peer's traffic terminates
+# locally at this pod's own tunnel address, so there's no forwarding
+# decision for the kernel to make at all.
+#
+# Exposed as a NodePort directly on a Kapsule node's public IP, not through
+# the shared Gateway — confirmed live 2026-08-09 that Scaleway's LB Service
+# integration silently drops non-TCP ports, so a UDPRoute there is never
+# actually reachable no matter how correctly Envoy Gateway itself is
+# configured. See templates/service.yaml and templates/networkpolicy.yaml
+# for how that new entry point is hardened (externalTrafficPolicy: Local +
+# explicit least-privilege NetworkPolicy, on top of WireGuard's own
+# silent-drop-on-auth-failure behavior).
+#
+# OIDC-gated web UIs (Grafana, ArgoCD, ...) don't work through a per-app
+# proxyTargets entry: those apps generate their own redirect_uri from a
+# single hardcoded root_url, so a login started via a tunnel-specific
+# address (different host/port than that root_url) can never complete —
+# confirmed live 2026-08-09, Grafana's "Missing saved oauth state". Fixed
+# via templates/deployment.yaml's proxy-gateway sidecar (raw TCP passthrough
+# to Envoy Gateway's real Service, SNI/Host untouched — indistinguishable
+# from public traffic to every app behind it) plus the dns sidecar (split-DNS:
+# *.scalepack.fr resolves to this pod's tunnel address only while the tunnel
+# is up, pushed to peers via their wg-quick config's DNS setting).
+#
+# proxyTargets (below) started out also carrying a dedicated openbao:8200
+# entry for Terraform's vault provider, reasoned as "a machine credential
+# doesn't need Gateway/TLS in its path" — that reasoning didn't actually
+# hold up (OpenBao's HTTPRoute has no path restriction, so
+# /v1/auth/approle/login routes through proxy-gateway exactly like the UI
+# does; "no public listener" was already satisfied by both paths equally).
+# Removed 2026-08-10 to test consolidating everything onto proxy-gateway —
+# see infra repo's 05-secrets/openbao/{bootstrap,managed}/version.tf.
+namespace: wireguard
+
+# The domain the dns sidecar answers for (see templates/deployment.yaml) —
+# every *.scalepack.fr hostname resolves to server.address while the
+# tunnel is up.
+dnsZone: scalepack.fr
+
+server:
+  port: 51820
+  # Fixed rather than letting Kubernetes assign one from the NodePort range
+  # at random — peers' Endpoint needs a port that doesn't change if this
+  # Service is ever recreated. Must stay inside the cluster's configured
+  # NodePort range (default 30000-32767).
+  nodePort: 30820
+  # external-dns keeps this pointed at whichever node currently hosts the
+  # pod (see templates/service.yaml's annotation) — peers dial this, never
+  # a raw IP.
+  hostname: wg.scalepack.fr
+  # WireGuard's own point-to-point overlay subnet — unrelated to the
+  # cluster's pod/Service CIDR. The server sits at .1; each peer below gets
+  # its own /32 out of this range as its allowedIPs.
+  address: 10.100.0.1/24
+  image:
+    repository: lscr.io/linuxserver/wireguard
+    tag: "1.0.20260223"
+  # Secrets materialized by services/platform/wireguard/init (ExternalSecrets
+  # from OpenBao's kv/apps/wireguard/server-key and kv/apps/wireguard/peers
+  # respectively) — nothing about the tunnel's keys or peer list is
+  # hardcoded in this repo, all of it flows from the infra repo's
+  # 04-vpn/wireguard through OpenBao (see that init chart's values.yaml).
+  privateKeySecretName: wireguard-server-key
+  privateKeySecretKey: private-key
+  peersSecretName: wireguard-peers
+  serviceName: wireguard
+
+# name -> {port, target}. One sidecar container + Service port per entry
+# (see templates/deployment.yaml, templates/service.yaml) — a peer dials
+# this pod's tunnel address on `port` and gets proxied to `target`
+# (host:port, resolved by this pod's normal cluster DNS at connection time,
+# so no ClusterIP-stability question to worry about). Empty for now — see
+# the header comment above; add an entry back if something genuinely needs
+# a dedicated non-Gateway path.
+proxyTargets: {}

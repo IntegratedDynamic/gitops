@@ -1,0 +1,46 @@
+# NodePort, not routed through the shared Gateway — confirmed live 2026-08-09
+# that Scaleway's cloud-controller-manager silently drops any non-TCP
+# Service port when building the LB (scaleway-cloud-controller-manager's
+# loadbalancers.go: `if port.Protocol != v1.ProtocolTCP { skip }`), so a
+# UDPRoute on the Gateway's LB was never reachable — zero datagrams ever
+# arrived at Envoy despite every Gateway API resource reporting Accepted/
+# Programmed. Kapsule nodes already carry individual public IPs, so this
+# exposes the tunnel directly on those instead — a genuinely new entry
+# point, hardened accordingly:
+#   - externalTrafficPolicy: Local — only node(s) actually running this
+#     pod accept traffic on this port at all; every other node in the pool
+#     stays fully closed on it. Also preserves the real client source IP
+#     (no extra SNAT hop) and avoids Kubernetes' cross-node NodePort
+#     redirect entirely.
+#   - templates/networkpolicy.yaml is the explicit least-privilege
+#     complement: ingress to this pod is enforced at exactly UDP/{{ .Values.server.port }},
+#     nothing else, regardless of what the pod spec happens to expose.
+#   - WireGuard's own protocol does the rest: an unauthenticated packet is
+#     silently dropped, no response, no banner — a port scan can't tell
+#     this apart from a closed port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.server.serviceName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    # external-dns's `service` source has first-class NodePort support: for
+    # externalTrafficPolicy: Local (above), it resolves the ExternalIP of
+    # whichever node(s) currently have a live pod backing this Service
+    # (source/service.go's nodesExternalTrafficPolicyTypeLocal) and keeps
+    # this record pointed there — no custom script, this is exactly the
+    # same external-dns already running for every other *.scalepack.fr
+    # hostname (services/platform/external-dns). Peers dial this hostname,
+    # never a raw node IP that changes on every reschedule/cluster rebuild.
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.server.hostname }}
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: wireguard
+  ports:
+    - name: wireguard
+      port: {{ .Values.server.port }}
+      targetPort: {{ .Values.server.port }}
+      nodePort: {{ .Values.server.nodePort }}
+      protocol: UDP

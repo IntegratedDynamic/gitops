@@ -1,0 +1,5 @@
+apiVersion: v2
+name: wireguard-config
+description: Self-hosted WireGuard tunnel server, fronted by the shared Envoy Gateway, giving Terraform's vault provider a non-public path to OpenBao's ClusterIP
+type: application
+version: 0.1.0

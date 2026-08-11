@@ -1,0 +1,24 @@
+# Explicit least-privilege ingress for the one pod in this cluster reachable
+# from the raw internet via a node's public IP (see service.yaml) — a
+# default Kubernetes stance of "whatever the pod spec exposes is reachable"
+# isn't good enough for a pod sitting on that entry point. This is the
+# enforced contract: exactly UDP/{{ .Values.server.port }}, from anywhere (peers roam, can't be
+# source-IP-scoped), nothing else — so a future change that adds another
+# container port to this pod doesn't silently become internet-reachable.
+# Enforced by Cilium (this cluster's CNI), which programs NodePort-DNAT'd
+# traffic through the same policy engine as any other ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wireguard
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wireguard
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: UDP
+          port: {{ .Values.server.port }}

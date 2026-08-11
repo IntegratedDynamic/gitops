@@ -1,0 +1,6 @@
+# No overrides needed — the peer list used to be hardcoded here, replaced
+# by services/platform/wireguard/init's wireguard-peers Secret (synced from
+# OpenBao, itself sourced from the infra repo's 04-vpn/wireguard state).
+# Kept as an empty file so this chart follows the same
+# applications/scaleway -> values-scaleway.yaml convention as every other
+# chart in this repo, in case a real override shows up later.
