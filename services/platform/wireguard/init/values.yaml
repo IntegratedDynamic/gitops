@@ -1,0 +1,26 @@
+# Pulls WireGuard state from OpenBao into Secrets that
+# services/platform/wireguard/config's Deployment mounts — nothing about
+# the tunnel is hardcoded in this repo, all of it is minted in the infra
+# repo's 04-vpn/wireguard and routed through OpenBao like every other
+# cross-repo value (05-secrets/openbao/managed, see that root's README for
+# the full chain).
+namespace: wireguard
+
+# ClusterSecretStore declared by the openbao-init chart.
+clusterSecretStoreName: openbao
+
+refreshInterval: 1h
+
+# The tunnel server's own private key — sensitive, its own object since
+# nothing else reads it.
+serverKey:
+  openbaoPath: apps/wireguard/server-key
+  secretName: wireguard-server-key
+
+# name -> {publicKey, allowedIPs}. Not actually secret, but routed through
+# the same pipe anyway — no cross-repo copy-paste for this either. See
+# templates/../config/templates/deployment.yaml for how this Secret gets
+# turned into wg0.conf's [Peer] blocks.
+peers:
+  openbaoPath: apps/wireguard/peers
+  secretName: wireguard-peers
