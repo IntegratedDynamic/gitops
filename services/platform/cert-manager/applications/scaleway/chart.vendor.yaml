@@ -33,17 +33,22 @@ spec:
         # the scheduler has nothing to balance nodes on and Cluster
         # Autoscaler never sees a reason to use the pool's 3rd node, so a
         # fresh scaleway-homelab boot piles ~30 pods onto one 2-node's worth
-        # of real RAM and OOMs. cainjector gets the most headroom: it watches
-        # every CRD/webhook/APIService in the cluster to inject CA bundles,
-        # so its memory scales with total CRD count and spikes hardest during
-        # the initial sync right after cert-manager's own CRDs land.
+        # of real RAM and OOMs.
+        #
+        # Sized from `kubectl top pods -n cert-manager` on the live cluster
+        # (2026-08-11), not chart-doc guesses — a first pass anchored on
+        # generic recommendations left the controller request at half its
+        # observed usage. cainjector gets the most headroom: it watches every
+        # CRD/webhook/APIService in the cluster to inject CA bundles, so its
+        # memory scales with total CRD count and spikes hardest during the
+        # initial sync right after cert-manager's own CRDs land.
         resources:
           requests:
             cpu: 10m
-            memory: 32Mi
+            memory: 96Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 200m
+            memory: 256Mi
         webhook:
           resources:
             requests:
@@ -56,10 +61,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 64Mi
+              memory: 96Mi
             limits:
               cpu: 200m
-              memory: 256Mi
+              memory: 320Mi
         startupapicheck:
           resources:
             requests:
