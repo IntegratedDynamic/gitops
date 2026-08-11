@@ -1,0 +1,27 @@
+# Non-secret half of wg0.conf ([Interface] only). The private key comes
+# from the Secret services/platform/wireguard/init materializes; [Peer]
+# blocks come from that same init chart's wireguard-peers Secret — both
+# combined by an initContainer at pod start (see deployment.yaml), never
+# by Helm/ArgoCD, since ArgoCD's rendering has no access to a Secret's
+# live content.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wireguard-conf-template
+  namespace: {{ .Values.namespace }}
+data:
+  wg0.conf.tmpl: |
+    [Interface]
+    Address = {{ .Values.server.address }}
+    ListenPort = {{ .Values.server.port }}
+    PrivateKey = __PRIVATE_KEY__
+    # No PostUp/PostDown NAT+forwarding rules on purpose (see deployment.yaml's
+    # proxy-gateway container) — this pod isn't a router for the wider cluster, it terminates the
+    # tunnel and re-originates plain outbound connections via userspace proxies.
+    # That needs no net.ipv4.ip_forward/src_valid_mark: tried the kernel-routing
+    # approach first, but Kapsule's kubelet doesn't allowlist either sysctl and
+    # Scaleway's own kubelet_args API rejects widening that allowlist for this
+    # k8s version anyway — and even where it's technically available, an
+    # unsafe-sysctls allowlist is a cluster-wide relaxation for one workload's
+    # benefit, worth avoiding on its own merits, not just because it was
+    # blocked here.

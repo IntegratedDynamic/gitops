@@ -33,6 +33,7 @@ acmeEmail: nicolas.brieussel@gmail.com
 # namespace (same Scaleway DNS credentials external-dns already uses).
 scalewayCredentialsSecretName: scaleway-dns-credentials
 
+
 # PreSync hook (templates/cert-restore-*.yaml): restores the ACME account key
 # + wildcardCertSecretName above from the latest Velero backup BEFORE this
 # chart's own ClusterIssuers/Gateway get created on a fresh cluster — see
