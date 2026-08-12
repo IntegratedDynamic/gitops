@@ -12,7 +12,14 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}
+        scalepack.fr/sync-wave: {{ .Values.syncWave | quote }}
     spec:
+      # Soft "don't stack on other pods from this same sync-wave" — see
+      # services/platform/cert-manager/chart/values-scaleway.yaml's
+      # comment on the same fix. This chart is in-house (not a vendored
+      # dependency), so unlike other charts in this repo, affinity support
+      # had to be added to the template itself, not just set via values.
+      affinity: {{ .Values.affinity | toYaml | nindent 8 }}
       containers:
         - name: nginx
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
