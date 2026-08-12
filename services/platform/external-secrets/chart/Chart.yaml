@@ -1,0 +1,21 @@
+apiVersion: v2
+name: external-secrets
+description: Wrapper chart pulling in vendor external-secrets (ESO), so this
+  deployment is a plain Application managed directly by
+  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's
+  scalewayApps list) instead of the old, uncoordinated
+  services-vendor-scaleway/services-app-scaleway split. ESO is the
+  controller itself — it consumes no OpenBao-sourced Secret (it's what
+  PROVIDES that mechanism to everything else), wave 2 (after OpenBao's own
+  server AND its raft restore, wave 0/1 — see bootstrap/values.yaml).
+  The ClusterSecretStore this operator's ServiceAccount authenticates
+  through is declared in services/platform/secrets-sync/config, same wave
+  as this chart — not here, and not in openbao-init either (it's not
+  coupled to that chart's restore Job on purpose).
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: external-secrets
+    version: 2.6.0
+    repository: "https://external-secrets.io"

@@ -1,28 +1,57 @@
 {{- if eq .Values.env "scaleway" }}
-# Vendor charts: hand-written Application manifests under
-# services/**/applications/scaleway/*.vendor.yaml, applied as-is (no
-# templating, no shared schema) — one recurse Application per env, re-synced
-# fresh from `revision` on every ArgoCD sync (same trick the old `platform`
-# app-of-apps relied on for revision propagation on inline values).
+# Every scaleway Application, rendered directly here as a managed resource
+# of the `bootstrap` Application's own sync — see the long comment atop
+# bootstrap/values.yaml's `scalewayApps` list (the actual data source) for
+# why this replaced both the old services-vendor-scaleway/services-app-scaleway
+# split AND a later ApplicationSet+RollingSync attempt. sync-wave on
+# resources of one parent Application's own sync is the mechanism that
+# actually works for both first-time creation and later updates.
+{{- range .Values.scalewayApps }}
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: services-vendor-scaleway
+  name: {{ .name }}
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .wave | quote }}
 spec:
   project: default
 
   source:
-    repoURL: {{ .Values.repoURL }}
-    targetRevision: {{ .Values.revision }}
-    path: services
-    directory:
-      recurse: true
-      include: "*/*/applications/scaleway/*.vendor.yaml"
+    repoURL: {{ $.Values.repoURL }}
+    targetRevision: {{ $.Values.revision }}
+    path: {{ .chartPath }}
+    helm:
+      valueFiles:
+        - {{ .valueFile }}
+
+  # Any MutatingWebhookConfiguration's caBundle gets injected at runtime by
+  # its owning chart's own cert-generation, which never matches what's in
+  # git — standard ArgoCD pattern for any self-signed webhook cert (only
+  # OpenBao's agent-injector has one today). Applied unconditionally to
+  # every app here: harmless no-op for the rest. See "the case of injected
+  # CA bundles": https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/
+  #
+  # Deliberately NOT using ignoreDifferences for the OpenAPI-schema-default
+  # drift ExternalSecret/HTTPRoute/SecurityPolicy showed live 2026-08-11
+  # (the API server fills in fields like a BackendRef's group/kind/weight
+  # that our manifests omitted) — tried that first, but ignoreDifferences
+  # is for fields genuinely outside GitOps control (like this caBundle),
+  # not for fields we simply left unset. Blanket-ignoring them would also
+  # hide real future drift on those same fields (e.g. someone bumping a
+  # BackendRef's weight for canary routing). Fixed at the source instead:
+  # every affected template now writes those defaults explicitly, so
+  # desired matches live exactly and ArgoCD's diff stays meaningful.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: {{ .namespace }}
 
   syncPolicy:
     automated:
@@ -30,48 +59,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
----
-# In-house charts: small param files under
-# services/**/applications/scaleway/*.app.yaml, expanded through this shared
-# template. Needed (instead of the plain recurse above) because these
-# Applications load a chart from THIS repo, so revision/repoURL must be
-# injected — the ApplicationSet template bakes in `revision`/`repoURL` from
-# bootstrap's own Helm values, exactly like the old clusters/scaleway/ chart did.
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: services-app-scaleway
-  namespace: argocd
-spec:
-  goTemplate: true
-  generators:
-    - git:
-        repoURL: {{ .Values.repoURL }}
-        revision: {{ .Values.revision }}
-        files:
-          - path: "services/*/*/applications/scaleway/*.app.yaml"
-  template:
-    metadata:
-      name: '{{ `{{.name}}` }}'
-      namespace: argocd
-      annotations:
-        argocd.argoproj.io/sync-wave: '{{ `{{.syncWave}}` }}'
-    spec:
-      project: default
-      source:
-        repoURL: {{ .Values.repoURL }}
-        targetRevision: {{ .Values.revision }}
-        path: '{{ `{{.chartPath}}` }}'
-        helm:
-          valueFiles:
-            - '{{ `{{.valueFile}}` }}'
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: '{{ `{{.namespace}}` }}'
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
+      # Unconditional, not opt-in per app: same reasoning as
+      # ignoreDifferences above, and ArgoCD's own recommended default for
+      # reducing client-side 3-way-merge diff issues.
+      - ServerSideApply=true
+{{- end }}
 {{- end }}

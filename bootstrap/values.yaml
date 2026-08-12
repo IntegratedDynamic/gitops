@@ -16,3 +16,128 @@ env: local
 # TODO(validation): enforce `revision: main` as a PR check before merge.
 revision: main
 repoURL: https://github.com/IntegratedDynamic/gitops.git
+
+# Every scaleway Application, rendered directly as a managed resource of
+# the `bootstrap` Application itself (bootstrap/templates/scaleway.yaml) —
+# NOT via an ApplicationSet. Confirmed live 2026-08-11: ArgoCD's
+# Progressive Syncs (RollingSync) strategy does not gate the *first-ever*
+# creation/sync of Applications an ApplicationSet generates — every stage's
+# apps got created AND synced simultaneously on a fresh ApplicationSet,
+# regardless of RollingSync step order, because each generated Application
+# carries its own independent `syncPolicy.automated` and the ArgoCD
+# Application controller (a separate process from the ApplicationSet
+# controller) picks it up immediately. RollingSync appears to only pace
+# staged *updates* across an already-existing fleet, not bootstrap
+# ordering of brand-new ones.
+#
+# Plain sync-wave on resources of ONE parent Application's own sync (what
+# this list produces) is the actually-proven mechanism — it's what
+# services-vendor-scaleway used successfully for cert-manager (-1) vs
+# openbao (0) before this list replaced it. A product's chart and its
+# -init/-config companion share a wave and sync concurrently as one unit
+# (accepted brief intra-wave race, self-heals in seconds — same tradeoff a
+# single Helm release's own resources already have) EXCEPT where a
+# dependency is on another app's *completion*, not just its existence —
+# see wave 1 below for why openbao-init got split out on its own. More
+# waves are cheap; add one whenever "exists" isn't actually enough.
+scalewayApps:
+  # wave 0 — openbao: the root, and ONLY the root.
+  - {name: openbao, namespace: openbao, chartPath: services/platform/openbao/chart, valueFile: values-scaleway.yaml, wave: "0"}
+
+  # wave 1 — openbao-init, alone: restores OpenBao's raft snapshot, which
+  # is what actually repopulates the KV secrets every later wave's
+  # ExternalSecrets read on a fresh cluster boot. Split out from wave 0
+  # purely to guarantee the openbao-0 pod that wave provisions is actually
+  # up and ready before this restore Job talks to it — a readiness gate on
+  # OpenBao itself, nothing to do with ESO.
+  #
+  # openbao-init has no ClusterSecretStore dependency, and conceptually
+  # never did: this cluster's secret management is really two systems —
+  # OpenBao as the internal Secret Store Manager's backend, ESO as its
+  # frontend — and openbao-init is the one service that has to bootstrap
+  # itself before either exists, since it's what makes both usable for
+  # everything else. That's why its own credentials (the S3 Secret it
+  # restores from) are the one exception in this whole architecture:
+  # Terraform-managed (10-cluster/scaleway/main.tf's
+  # kubernetes_secret.scaleway_s3_credentials), not ESO-managed — it can't
+  # depend on the mechanism it exists to unlock. The ClusterSecretStore
+  # itself physically lived in this chart's templates/ until 2026-08-12
+  # (moved to services/platform/secrets-sync/config, see that chart's own
+  # comment) — a file-location accident from early iteration, not evidence
+  # this chart was ever meant to be coupled to ESO's mechanics.
+  #
+  # Confirmed live 2026-08-12: this is NOT the same "brief intra-wave race,
+  # self-heals" tradeoff bundled apps get elsewhere in this list — wave 2's
+  # consumers need this restore to have actually *completed*, not just
+  # openbao-init to exist, or they sync against an empty/uninitialized
+  # store and fail outright rather than just retry-and-catch-up.
+  - {name: openbao-init, namespace: openbao, chartPath: services/platform/openbao/init, valueFile: values-scaleway.yaml, wave: "1"}
+
+  # wave 2 — eso: the ESO operator, plus its first real consumers now that
+  # OpenBao's data (wave 1) is actually restored and usable through the
+  # ClusterSecretStore secrets-sync itself declares (see that chart's own
+  # templates/clustersecretstore.yaml). secrets-sync produces nothing
+  # anything else here reads, so it just needs the same prerequisite as
+  # ESO itself — bundled rather than given its own wave.
+  - {name: external-secrets, namespace: external-secrets, chartPath: services/platform/external-secrets/chart, valueFile: values-scaleway.yaml, wave: "2"}
+  - {name: secrets-sync, namespace: secrets-sync, chartPath: services/platform/secrets-sync/config, valueFile: values-scaleway.yaml, wave: "2"}
+
+  # wave 3 — velero.
+  # Velerao 
+  - {name: velero-init, namespace: velero, chartPath: services/platform/velero/init, valueFile: values.yaml, wave: "3"}
+  - {name: velero, namespace: velero, chartPath: services/platform/velero/chart, valueFile: values-scaleway.yaml, wave: "3"}
+
+  # wave 4 — envoy-gateway + gateway-config, alone. Split out of the old
+  # bundled "platform" wave 2026-08-12: live testing after a fresh cluster
+  # boot showed two consumers racing against this pair specifically — not
+  # just "exists" but "has actually reconciled". cert-manager's controller
+  # crash-looped ~4x on "the Gateway API CRDs do not seem to be present"
+  # (ExperimentalGatewayAPISupport needs the CRDs envoy-gateway's chart
+  # installs), and wireguard-config's proxy-gateway sidecar crash-looped 3x
+  # on an empty `kubectl get svc -l gateway.envoyproxy.io/owning-gateway-
+  # name=scaleway-gateway` (that Service only exists once gateway-config's
+  # Gateway object has been reconciled by the envoy-gateway controller).
+  # Both self-healed within about a minute, so this was never a hard
+  # failure — but a wave of its own removes the race outright instead of
+  # just tolerating it. gateway-config needs envoy-gateway's CRDs, so they
+  # share this wave rather than each getting their own (same "brief
+  # intra-wave race, self-heals" tradeoff every other bundled wave here
+  # accepts — CRD registration is near-instant, nowhere near envoy-gateway
+  # controller's own reconcile-to-ready latency that wave 5 below actually
+  # needed to wait out).
+  - {name: envoy-gateway, namespace: envoy-gateway-system, chartPath: services/platform/gateway/chart, valueFile: values-scaleway.yaml, wave: "4"}
+  - {name: gateway-config, namespace: gateway, chartPath: services/platform/gateway/config, valueFile: values-scaleway.yaml, wave: "4"}
+
+  # wave 5 — platform: wireguard, Dex, external-dns, cert-manager (+ its
+  # Scaleway DNS01 ACME webhook). All of these need wave 4's envoy-gateway
+  # to have actually finished reconciling — cert-manager for the Gateway
+  # API CRDs its gatewayAPI.enabled config depends on, wireguard-config's
+  # proxy-gateway sidecar for the Service envoy-gateway provisions once
+  # gateway-config's Gateway object exists (see wave 4's comment above).
+  # cert-manager's webhook found live 2026-08-11 to have the exact same
+  # OpenBao-secret race as Velero/external-dns/Dex, just via a different
+  # values key (secret.externalSecretName) that the original fix's grep
+  # pattern missed. That webhook deployment doesn't need cert-manager's
+  # own CRDs to exist (it's just a Deployment/Service/APIService
+  # registration — cert-manager, same wave, is the CONSUMER of this
+  # webhook via the extension API it registers, not the other way
+  # around), so it's fine bundled here rather than earlier.
+  - {name: cert-manager, namespace: cert-manager, chartPath: services/platform/cert-manager/chart, valueFile: values-scaleway.yaml, wave: "5"}
+  - {name: cert-manager-webhook-init, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-init, valueFile: values.yaml, wave: "5"}
+  - {name: cert-manager-webhook-scaleway, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-chart, valueFile: values-scaleway.yaml, wave: "5"}
+  - {name: wireguard-init, namespace: wireguard, chartPath: services/platform/wireguard/init, valueFile: values-scaleway.yaml, wave: "5"}
+  - {name: wireguard-config, namespace: wireguard, chartPath: services/platform/wireguard/config, valueFile: values-scaleway.yaml, wave: "5"}
+  - {name: dex-init, namespace: gateway, chartPath: services/platform/dex/init, valueFile: values.yaml, wave: "5"}
+  - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "5"}
+  - {name: external-dns-init, namespace: external-dns, chartPath: services/platform/external-dns/init, valueFile: values.yaml, wave: "5"}
+  - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "5"}
+
+  # wave 6 — monitoring. argocd-config/openbao-config ride along: same
+  # prerequisite (Gateway + Dex from wave 5), no named stage of their own.
+  - {name: grafana-config, namespace: monitoring, chartPath: services/platform/monitoring/grafana-config, valueFile: values-scaleway.yaml, wave: "6"}
+  - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "6"}
+  - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "6"}
+  - {name: openbao-config, namespace: openbao, chartPath: services/platform/openbao/config, valueFile: values-scaleway.yaml, wave: "6"}
+
+  # wave 7 — products.
+  - {name: demo, namespace: demo, chartPath: services/products/demo/chart, valueFile: values-scaleway.yaml, wave: "7"}

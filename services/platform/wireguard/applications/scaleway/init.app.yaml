@@ -1,5 +1,0 @@
-name: wireguard-init
-namespace: wireguard
-chartPath: services/platform/wireguard/init
-valueFile: values-scaleway.yaml
-syncWave: "3"

@@ -1,0 +1,169 @@
+# The identity broker: turns GitHub's org-restricted OAuth into a standard
+# OIDC provider that Envoy Gateway's native SecurityPolicy.oidc can talk to
+# directly (GitHub itself has no discovery/JWKS/id_token — Dex bridges that
+# gap). Single replica, in-memory storage — no HA on Scaleway, consistent
+# with the rest of this cluster.
+#
+# staticClients.envoy-gateway is the one OAuth2 client every protected app's
+# SecurityPolicy authenticates against (see services/products/demo/chart/templates/securitypolicy.yaml).
+# Its redirectURIs list must include every protected app's callback URL —
+# add a line here whenever a new app opts into SSO.
+#
+# staticClients.argocd is a separate client: ArgoCD talks OIDC natively
+# (configs.cm.oidc.config in the infrastructure repo's argocd.tf) instead of
+# going through Envoy Gateway's SecurityPolicy filter, so it needs its own
+# clientID/secret (see services/platform/argocd-config/config for the redirectURI's HTTPRoute
+# and the ExternalSecret materializing this secret into argocd's namespace).
+#
+# staticClients.argocd-cli is `argocd login --sso`'s own direct PKCE dance
+# against Dex (bypassing argocd-server entirely, unlike the browser flow
+# above) — it can never know argocd's client secret, so it needs its own
+# public (secret-less) client, wired via configs.cm.oidc.config.cliClientID
+# in the infrastructure repo's argocd.tf. Confirmed live: pointing the CLI
+# at the confidential `argocd` client instead fails with Dex's
+# "invalid_client: Invalid client credentials."
+#
+# staticClients.grafana is another native-OIDC app, same shape as argocd:
+# Grafana's own auth.generic_oauth provider (see
+# bootstrap/values.yaml) talks to Dex directly, with
+# its role_attribute_path mapping the IntegratedDynamic:Admin group (this
+# same "groups" claim sso-guard already reads) to Grafana's Admin org role,
+# everyone else falling back to Viewer. Secret materialized into the
+# monitoring namespace by services/platform/monitoring/grafana-config, mirroring services/platform/argocd-config/config.
+#
+# staticClients.openbao is different again: OpenBao has no app-level "OIDC
+# provider" setting like ArgoCD/Grafana — it's a dedicated JWT/OIDC *auth
+# method* (auth/oidc), configured inside OpenBao itself (bao write
+# auth/oidc/config / auth/oidc/role, applied out-of-band the same way as
+# the rest of OpenBao's internal config — see openbao-claude.md). Both
+# redirect URIs are required: the UI's fixed callback path
+# (/ui/vault/auth/<mount>/oidc/callback, mount = "oidc") and the CLI's
+# default `bao login -method=oidc` callback (localhost:8250). See
+# services/platform/openbao/config for the HTTPRoute exposing openbao.scalepack.fr.
+#
+# Credentials (GitHub client id/secret, the static client secret) come from
+# OpenBao via services/platform/dex/init — same sync-wave (5) as this
+# chart in bootstrap/values.yaml, both part of the "platform" wave.
+#
+# Values below nest under `dex:` because this chart is a thin wrapper
+# declaring the real Dex chart as a dependency (see chart/Chart.yaml) — Helm
+# only exposes a subchart the values under its dependency name.
+dex:
+  config:
+    issuer: https://auth.scalepack.fr
+
+    storage:
+      type: memory
+
+    # GitHub is the only login method — no local username/password DB.
+    enablePasswordDB: false
+
+    oauth2:
+      # Skip Dex's own "Grant Access" consent screen — envoy-gateway is
+      # our own trusted client, not a third-party app.
+      skipApprovalScreen: true
+
+    connectors:
+      - type: github
+        id: github
+        name: GitHub
+        config:
+          clientID: "$GITHUB_CLIENT_ID"
+          clientSecret: "$GITHUB_CLIENT_SECRET"
+          redirectURI: https://auth.scalepack.fr/callback
+          orgs:
+            - name: IntegratedDynamic
+
+    staticClients:
+      - id: envoy-gateway
+        name: Envoy Gateway
+        # staticClients has no $VAR expansion (that's connectors/storage
+        # only) — it needs this dedicated secretEnv field instead,
+        # naming the env var (no $ prefix). https://github.com/dexidp/dex/issues/889
+        secretEnv: ENVOY_CLIENT_SECRET
+        redirectURIs:
+          # One entry per protected app — see services/products/demo/chart/templates/securitypolicy.yaml.
+          - https://demo.scalepack.fr/oauth2/callback
+      - id: argocd
+        name: ArgoCD
+        secretEnv: ARGOCD_CLIENT_SECRET
+        redirectURIs:
+          - https://argocd.scalepack.fr/auth/callback
+      - id: argocd-cli
+        name: ArgoCD CLI
+        public: true
+        redirectURIs:
+          # Fixed port (8085) is the CLI's documented default
+          # (--sso-port to override).
+          - http://localhost:8085/auth/callback
+      - id: openbao
+        name: OpenBao
+        secretEnv: OPENBAO_CLIENT_SECRET
+        redirectURIs:
+          - https://openbao.scalepack.fr/ui/vault/auth/oidc/oidc/callback
+          # `bao login -method=oidc`'s own default local callback port.
+          - http://localhost:8250/oidc/callback
+      - id: grafana
+        name: Grafana
+        secretEnv: GRAFANA_CLIENT_SECRET
+        redirectURIs:
+          # Grafana's fixed generic_oauth callback path.
+          - https://grafana.scalepack.fr/login/generic_oauth
+
+  envVars:
+    - name: GITHUB_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: github-client-id
+    - name: GITHUB_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: github-client-secret
+    - name: ENVOY_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: envoy-client-secret
+    - name: ARGOCD_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: argocd-client-secret
+    - name: OPENBAO_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: openbao-client-secret
+    - name: GRAFANA_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: grafana-client-secret
+
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+  # Soft "don't stack on other pods from this same sync-wave" (wave 5
+  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+  # the same fix.
+  podLabels:
+    scalepack.fr/sync-wave: "5"
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: scalepack.fr/sync-wave
+                  operator: In
+                  values: ["5"]
+            topologyKey: kubernetes.io/hostname

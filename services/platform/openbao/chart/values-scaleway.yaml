@@ -1,0 +1,116 @@
+# Values below nest under `openbao:` because this chart is a thin wrapper
+# declaring the real OpenBao chart as a dependency (see chart/Chart.yaml) —
+# Helm only exposes a subchart the values under its dependency name.
+openbao:
+  server:
+    ha:
+      enabled: false
+    # Soft "don't stack on other pods from this same sync-wave" — every
+    # chart in this repo gets the same pattern (see e.g.
+    # services/platform/cert-manager/chart/values-scaleway.yaml's comment
+    # on the same fix), scoped to wave via the scalepack.fr/sync-wave pod
+    # label (extraLabels below) rather than a blanket "avoid every
+    # Helm-managed pod forever" rule — the actual problem is contention
+    # between pods that start *together* (same wave), not steady-state
+    # bin-packing in general, which the scheduler should stay free to do
+    # once the cluster is up. Preferred, not required: with only 2 nodes,
+    # a hard rule would leave pods unschedulable whenever the pool is down
+    # to 1 node. The wave number here (0) must match this app's `wave` in
+    # bootstrap/values.yaml's scalewayApps entry — no cross-file reference
+    # mechanism, so it's a manual pair to keep in sync if either changes.
+    # This chart's own default here (self-anti-affinity against other
+    # openbao server replicas) is a no-op anyway since ha.enabled is false
+    # — replaced rather than merged, since this field is a raw string, not
+    # a map. Currently a no-op either way (wave 0 has no other apps in it)
+    # — kept for consistency/future-proofing if that ever changes.
+    extraLabels:
+      scalepack.fr/sync-wave: "0"
+    affinity: |
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: scalepack.fr/sync-wave
+                    operator: In
+                    values: ["0"]
+              topologyKey: kubernetes.io/hostname
+    # AWS credentials the awskms seal authenticates with. OpenBao must read
+    # these at startup to unseal — they cannot come from OpenBao itself
+    # (chicken-and-egg). Secret created out-of-band by 02-cluster/scaleway
+    # terraform; values originate from 03-backup/scaleway kms.tf.
+    extraSecretEnvironmentVars:
+      - envName: AWS_ACCESS_KEY_ID
+        secretName: openbao-unseal-aws
+        secretKey: AWS_ACCESS_KEY_ID
+      - envName: AWS_SECRET_ACCESS_KEY
+        secretName: openbao-unseal-aws
+        secretKey: AWS_SECRET_ACCESS_KEY
+    standalone:
+      config: |
+        ui = true
+        listener "tcp" {
+          address     = "0.0.0.0:8200"
+          tls_disable = true
+        }
+        storage "raft" {
+          path    = "/openbao/data"
+          node_id = "openbao-0"
+        }
+        # Auto-unseal via AWS KMS. region + kms_key_id are non-secret
+        # (the IAM creds above gate access). On first `bao operator init`
+        # this yields RECOVERY keys, not unseal keys — store them safely.
+        seal "awskms" {
+          region     = "eu-west-3"
+          kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
+        }
+
+    # Chart ships resources: {} by default. See
+    # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+    # the same fix. OpenBao backs every other app's secrets in this
+    # cluster (including its own snapshotAgent below), so it gets the
+    # most headroom of anything here — raft compaction and unseal both
+    # spike above steady-state usage. Request sized from `kubectl top
+    # pods -n openbao` (2026-08-11, observed 49-62m/113Mi); limit kept
+    # well above that for the compaction/unseal spikes above.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 160Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  injector:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+  snapshotAgent:
+    enabled: true
+    schedule: "0 * * * *" # Every hours, at 0min.
+    s3CredentialsSecret: "scaleway-s3-credentials"
+    # Runs as its own CronJob (not a sidecar in the server pod) — a
+    # short-lived s3cmd export, so it gets a low request but a limit
+    # well above it: same "bursty tool, generous limit" reasoning as
+    # monitoring/applications/scaleway/chart.app.yaml's grafana/prometheus comment.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 32Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    config:
+      s3Host: "s3.fr-par.scw.cloud"
+      s3Bucket: "backup-dev-id"
+      s3Uri: "s3://backup-dev-id"
+      s3ExpireDays: "14"
+      s3cmdExtraFlag: "--server-side-encryption -v"
+      # baoAuthPath: "kubernetes"
+      # baoRole: "snapshot"

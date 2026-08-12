@@ -1,0 +1,40 @@
+# Values below nest under `scaleway-certmanager-webhook:` because this
+# chart is a thin wrapper declaring the real chart as a dependency (see
+# Chart.yaml) — Helm only exposes a subchart the values under its
+# dependency name.
+scaleway-certmanager-webhook:
+  # Secret keys are SCW_ACCESS_KEY / SCW_SECRET_KEY, same as the
+  # external-dns credentials this reuses — envFrom-injected into the
+  # webhook deployment as its default Scaleway credentials.
+  secret:
+    externalSecretName: scaleway-dns-credentials
+
+  # See services/platform/cert-manager/chart/values-scaleway.yaml's comment
+  # on the same fix — this chart also ships resources: {} by default.
+  # Sized from `kubectl top pods` (2026-08-11): a first pass guessed
+  # 16Mi here against an actual observed ~45Mi, nearly 3x under.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+  # Soft "don't stack on other pods from this same sync-wave" (wave 5
+  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+  # the same fix.
+  podLabels:
+    scalepack.fr/sync-wave: "5"
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: scalepack.fr/sync-wave
+                  operator: In
+                  values: ["5"]
+            topologyKey: kubernetes.io/hostname

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: openbao
+description: Wrapper chart pulling in vendor OpenBao, so this deployment goes
+  as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list) (RollingSync by
+  `stage` label — see bootstrap/templates/scaleway.yaml) instead of the
+  old, uncoordinated services-vendor-scaleway/services-app-scaleway split. OpenBao is the
+  root of the whole pipeline (stage "openbao", first RollingSync step) —
+  its own unseal credentials come from a Secret provisioned out-of-band by
+  Terraform (02-cluster/scaleway), not from OpenBao/ESO itself
+  (chicken-and-egg), so it has no upstream dependency in this graph.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: openbao
+    version: 0.28.6
+    repository: "https://openbao.github.io/openbao-helm"
