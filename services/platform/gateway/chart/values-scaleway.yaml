@@ -1,0 +1,27 @@
+# The vendor chart.vendor.yaml this replaces shipped no custom helm values
+# — 100% chart defaults, except the anti-affinity below. Nests under
+# `gateway-helm:` (not `envoy-gateway:`) — that's the dependency's real
+# chart name in chart/Chart.yaml, distinct from this wrapper's own name.
+gateway-helm:
+  deployment:
+    pod:
+      # Soft "don't stack on other pods from this same sync-wave" (wave 4
+      # here — must match this app's `wave` in bootstrap/values.yaml; this
+      # is the split-out wave envoy-gateway now shares only with
+      # gateway-config, not the wider platform wave anymore — see that
+      # file's comment for why) — see
+      # services/platform/cert-manager/chart/values-scaleway.yaml's
+      # comment on the same fix.
+      labels:
+        scalepack.fr/sync-wave: "4"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: scalepack.fr/sync-wave
+                      operator: In
+                      values: ["4"]
+                topologyKey: kubernetes.io/hostname

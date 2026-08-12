@@ -1,5 +1,0 @@
-name: secrets-sync
-namespace: secrets-sync
-chartPath: services/platform/secrets-sync/config
-valueFile: values-scaleway.yaml
-syncWave: "0"

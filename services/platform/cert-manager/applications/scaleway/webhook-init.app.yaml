@@ -1,8 +1,0 @@
-# Wave 3: after openbao-init (wave 2), whose chart declares the
-# ClusterSecretStore this app's ExternalSecret depends on. Same wave as
-# external-dns-init and velero-init — all three only need that ClusterSecretStore.
-name: cert-manager-webhook-init
-namespace: cert-manager
-chartPath: services/platform/cert-manager/webhook-init
-valueFile: values.yaml
-syncWave: "3"

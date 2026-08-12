@@ -1,5 +1,0 @@
-name: openbao-init
-namespace: openbao
-chartPath: services/platform/openbao/init
-valueFile: values-scaleway.yaml
-syncWave: "2"

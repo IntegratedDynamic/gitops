@@ -1,6 +1,0 @@
-# Wave 5: its HTTPRoute needs gateway-config's wave-4 Gateway to exist first.
-name: demo
-namespace: demo
-chartPath: services/products/demo/chart
-valueFile: values-scaleway.yaml
-syncWave: "5"

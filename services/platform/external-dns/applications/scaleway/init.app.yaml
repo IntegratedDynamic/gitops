@@ -1,7 +1,0 @@
-# Wave 3: after openbao-init (wave 2), whose chart declares the
-# ClusterSecretStore this app's ExternalSecret depends on.
-name: external-dns-init
-namespace: external-dns
-chartPath: services/platform/external-dns/init
-valueFile: values.yaml
-syncWave: "3"

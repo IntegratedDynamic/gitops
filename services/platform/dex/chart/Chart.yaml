@@ -1,0 +1,15 @@
+apiVersion: v2
+name: dex
+description: Wrapper chart pulling in vendor Dex, so this deployment can go
+  as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list)
+  instead of the old, uncoordinated services-vendor-scaleway/services-app-scaleway split — see
+  bootstrap/templates/scaleway.yaml. Needed because this chart consumes
+  dex-credentials, materialized by services/platform/dex/init (a sibling
+  app in that same graph) from OpenBao.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: dex
+    version: 0.24.1
+    repository: https://charts.dexidp.io

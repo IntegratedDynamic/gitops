@@ -1,0 +1,103 @@
+# Values below nest under `cert-manager:` because this chart is a thin
+# wrapper declaring the real cert-manager chart as a dependency (see
+# chart/Chart.yaml) — Helm only exposes a subchart the values under its
+# dependency name.
+cert-manager:
+  crds:
+    enabled: true
+
+  # Lets cert-manager watch Gateway API `Gateway` listeners directly
+  # (via the cert-manager.io/cluster-issuer annotation) instead of
+  # requiring a hand-written Certificate per app. ExperimentalGatewayAPISupport
+  # already defaults to true in this chart version; only the controller
+  # loop itself needs enabling.
+  config:
+    apiVersion: controller.config.cert-manager.io/v1alpha1
+    kind: ControllerConfiguration
+    gatewayAPI:
+      enabled: true
+
+  # Chart ships none of these by default (resources: {} everywhere) —
+  # confirmed live 2026-08-11: with every platform chart requestless,
+  # the scheduler has nothing to balance nodes on and Cluster
+  # Autoscaler never sees a reason to use the pool's 3rd node, so a
+  # fresh scaleway-homelab boot piles ~30 pods onto one 2-node's worth
+  # of real RAM and OOMs.
+  #
+  # Sized from `kubectl top pods -n cert-manager` on the live cluster
+  # (2026-08-11), not chart-doc guesses — a first pass anchored on
+  # generic recommendations left the controller request at half its
+  # observed usage. cainjector gets the most headroom: it watches every
+  # CRD/webhook/APIService in the cluster to inject CA bundles, so its
+  # memory scales with total CRD count and spikes hardest during the
+  # initial sync right after cert-manager's own CRDs land.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Soft "don't stack on other pods from this same sync-wave" — same
+  # pattern on every chart in this repo (controller here, webhook/cainjector
+  # below, each chart's own long-lived pods elsewhere). Confirmed live
+  # 2026-08-12: without this, the default scheduler happily piles every
+  # pod that starts in the same sync-wave onto whichever of the pool's 2
+  # nodes it favors first, causing resource contention there while the
+  # other node sits idle. Preferred, not required: with only 2 nodes, a
+  # hard rule would leave pods unschedulable whenever the pool is
+  # temporarily down to 1 node.
+  #
+  # Scoped to wave via the scalepack.fr/sync-wave pod label (podLabels
+  # below), not a blanket "avoid every Helm-managed pod forever" rule —
+  # the actual problem is contention between pods that start *together*
+  # (same wave), not steady-state bin-packing in general, which the
+  # scheduler should stay free to do once the cluster is up. The wave
+  # number here (5) must match this app's `wave` in bootstrap/values.yaml's
+  # scalewayApps entry — no cross-file reference mechanism, so it's a
+  # manual pair to keep in sync if either changes. Bumped from 4 to 5
+  # 2026-08-12 when envoy-gateway/gateway-config split into their own
+  # earlier wave 4 — see bootstrap/values.yaml's wave 4/5 comments.
+  podLabels: &waveLabel
+    scalepack.fr/sync-wave: "5"
+  affinity: &antiAffinity
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: scalepack.fr/sync-wave
+                  operator: In
+                  values: ["5"]
+            topologyKey: kubernetes.io/hostname
+
+  webhook:
+    podLabels: *waveLabel
+    affinity: *antiAffinity
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  cainjector:
+    podLabels: *waveLabel
+    affinity: *antiAffinity
+    resources:
+      requests:
+        cpu: 10m
+        memory: 96Mi
+      limits:
+        cpu: 200m
+        memory: 320Mi
+  startupapicheck:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi

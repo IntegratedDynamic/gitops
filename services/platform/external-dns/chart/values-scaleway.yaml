@@ -1,0 +1,67 @@
+# Values below nest under `external-dns:` because this chart is a thin
+# wrapper declaring the real external-dns chart as a dependency (see
+# chart/Chart.yaml) — Helm only exposes a subchart the values under its
+# dependency name.
+external-dns:
+  provider:
+    name: scaleway
+
+  # gateway-httproute picks up hostnames from HTTPRoutes attached to
+  # the shared Gateway (services/platform/gateway/config) — needs the Gateway API
+  # CRDs from gateway-api-crds.yml.
+  sources:
+    - service
+    - gateway-httproute
+
+  # Credentials materialized by services/platform/external-dns/init from
+  # OpenBao (see bootstrap/values.yaml).
+  env:
+    - name: SCW_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-scaleway-credentials
+          key: SCW_ACCESS_KEY
+    - name: SCW_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-scaleway-credentials
+          key: SCW_SECRET_KEY
+
+  # scalepack.fr, bought through Scaleway Domains & DNS. Leave
+  # txtOwnerId as-is going forward — changing it orphans existing TXT
+  # ownership records.
+  domainFilters:
+    - scalepack.fr
+  policy: upsert-only
+  registry: txt
+  txtOwnerId: scaleway
+
+  # See cert-manager/applications/scaleway/chart.app.yaml's comment
+  # on the same fix — this chart also ships resources: {} by default,
+  # and this pod is one that was confirmed live 2026-08-11 getting
+  # node-pressure Evicted during a fresh cluster boot.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+  # Soft "don't stack on other pods from this same sync-wave" (wave 5
+  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+  # the same fix.
+  podLabels:
+    scalepack.fr/sync-wave: "5"
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: scalepack.fr/sync-wave
+                  operator: In
+                  values: ["5"]
+            topologyKey: kubernetes.io/hostname

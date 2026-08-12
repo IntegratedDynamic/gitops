@@ -1,8 +1,0 @@
-# Wave 4: after cert-manager-webhook-init (wave 3, materializes the
-# credentials the ClusterIssuers reference) and after platform (wave 0,
-# which brings up envoy-gateway, cert-manager and its Scaleway webhook).
-name: gateway-config
-namespace: gateway
-chartPath: services/platform/gateway/config
-valueFile: values-scaleway.yaml
-syncWave: "4"

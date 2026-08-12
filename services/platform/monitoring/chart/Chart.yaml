@@ -1,0 +1,18 @@
+apiVersion: v2
+name: kube-prometheus-stack
+description: Wrapper chart pulling in vendor kube-prometheus-stack, so this
+  deployment can be a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list)
+  ApplicationSet instead of the old, uncoordinated
+  services-vendor-scaleway/services-app-scaleway split — see
+  bootstrap/templates/scaleway.yaml. Needed because
+  Grafana here consumes grafana-admin-credentials and
+  grafana-oidc-client-secret, materialized by
+  services/platform/monitoring/grafana-config (a sibling app in that same
+  graph) from OpenBao.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: 86.1.0
+    repository: https://prometheus-community.github.io/helm-charts

@@ -7,7 +7,7 @@ gateway:
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 
-# Service created by the openbao-helm chart (services/platform/openbao/applications/scaleway/chart.vendor.yaml),
+# Service created by the openbao-helm chart (bootstrap/values.yaml),
 # release name "openbao" — matches services/platform/openbao/init's baoAddr.
 openbaoServer:
   serviceName: openbao

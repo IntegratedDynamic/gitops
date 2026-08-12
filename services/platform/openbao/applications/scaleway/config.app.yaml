@@ -1,7 +1,0 @@
-# Wave 5: its HTTPRoute needs gateway-config's wave-4 Gateway to exist first
-# (same reasoning as argocd-config/demo/dex-init).
-name: openbao-config
-namespace: openbao
-chartPath: services/platform/openbao/config
-valueFile: values-scaleway.yaml
-syncWave: "5"

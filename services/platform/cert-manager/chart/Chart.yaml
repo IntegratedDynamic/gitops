@@ -1,0 +1,16 @@
+apiVersion: v2
+name: cert-manager
+description: Wrapper chart pulling in vendor cert-manager, so this deployment
+  goes as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list) (RollingSync by
+  `stage` label — see bootstrap/templates/scaleway.yaml) instead of the
+  old, uncoordinated services-vendor-scaleway/services-app-scaleway split. cert-manager itself
+  consumes no OpenBao-sourced Secret, so it's bundled into the earliest
+  "openbao" stage alongside the OpenBao server and the ESO operator — pure
+  scheduling convenience, no dependency on either.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: cert-manager
+    version: v1.21.0
+    repository: "oci://quay.io/jetstack/charts"

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: external-dns
+description: Wrapper chart pulling in vendor external-dns, so this deployment
+  can go as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list)
+  instead of the old, uncoordinated services-vendor-scaleway/services-app-scaleway split — see
+  bootstrap/templates/scaleway.yaml. Needed because this chart consumes
+  external-dns-scaleway-credentials, materialized by
+  services/platform/external-dns/init (a sibling app in that same graph)
+  from OpenBao.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: external-dns
+    version: 1.21.1
+    repository: https://kubernetes-sigs.github.io/external-dns

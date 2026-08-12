@@ -1,9 +1,0 @@
-# Wave 5: needs wireguard-init's wave-3 Secret (the tunnel server's private
-# key) to exist first. No Gateway dependency (NodePort, not routed through
-# it — see templates/service.yaml) — wave 5 kept anyway for a comfortable
-# margin past wireguard-init, not because it's required here.
-name: wireguard-config
-namespace: wireguard
-chartPath: services/platform/wireguard/config
-valueFile: values-scaleway.yaml
-syncWave: "5"
