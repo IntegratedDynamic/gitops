@@ -7,7 +7,12 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   parentRefs:
-    - name: {{ .Values.gatewayName }}
+    # See services/products/demo/chart/templates/httproute.yaml's comment:
+    # written explicitly to match the Gateway API's own schema defaults,
+    # avoiding permanent OutOfSync in ArgoCD.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
       sectionName: http
   # No hostnames set on purpose: the HTTP listener already only accepts
   # *.scalepack.fr traffic, so this still matches everything it should —
@@ -20,3 +25,11 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
+      # Also a schema default (omitted matches means "match everything"),
+      # written explicitly for the same reason as elsewhere in this repo's
+      # HTTPRoute templates — see
+      # services/platform/argocd-config/config/templates/httproute.yaml.
+      matches:
+        - path:
+            type: PathPrefix
+            value: /

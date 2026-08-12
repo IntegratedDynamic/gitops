@@ -1,5 +1,5 @@
 # Gates the parent app's own HTTPRoute behind GitHub org SSO (via Dex, see
-# services/platform/dex/applications/scaleway/chart.vendor.yaml). Envoy Gateway's native OIDC filter requires
+# bootstrap/values.yaml). Envoy Gateway's native OIDC filter requires
 # redirectURL to live on that HTTPRoute's own hostname — one SecurityPolicy
 # per protected app, not a shared policy. .Release.Name/.Release.Namespace
 # here resolve to the PARENT chart's release (subcharts share .Release).
@@ -21,10 +21,18 @@ spec:
       # propagation (this caused a real outage on cluster restart: the
       # Gateway LB IP changes, and envoy-gateway retried OIDC discovery
       # before the new record propagated, wedging the policy Invalid).
+      #
+      # backendRefs' group/kind/weight below (and clientSecret's/jwt's
+      # further down): written explicitly to match the Gateway API's own
+      # schema defaults, avoiding permanent OutOfSync in ArgoCD (confirmed
+      # live 2026-08-11).
       backendRefs:
-        - name: {{ .Values.dexServiceName }}
+        - group: ""
+          kind: Service
+          name: {{ .Values.dexServiceName }}
           namespace: {{ .Values.dexServiceNamespace }}
           port: {{ .Values.dexServicePort }}
+          weight: 1
       # Spelled out explicitly (Dex's standard OIDC paths) so the
       # controller's admission-time validation skips its own discovery
       # fetch entirely — that fetch ignores backendRefs and used plain DNS.
@@ -32,7 +40,10 @@ spec:
       tokenEndpoint: "{{ .Values.issuer }}/token"
     clientID: {{ .Values.clientID | quote }}
     clientSecret:
+      group: ""
+      kind: Secret
       name: {{ .Values.clientSecretName }}
+    refreshToken: true
     redirectURL: "https://{{ .Values.hostname }}/oauth2/callback"
     logoutPath: "/oauth2/logout"
     cookieDomain: {{ .Values.cookieDomain | quote }}
@@ -53,10 +64,14 @@ spec:
         issuer: {{ .Values.issuer | quote }}
         remoteJWKS:
           uri: "{{ .Values.issuer }}/keys"
+          cacheDuration: 300s
           backendRefs:
-            - name: {{ .Values.dexServiceName }}
+            - group: ""
+              kind: Service
+              name: {{ .Values.dexServiceName }}
               namespace: {{ .Values.dexServiceNamespace }}
               port: {{ .Values.dexServicePort }}
+              weight: 1
         extractFrom:
           cookies:
             - {{ .Release.Name }}-id-token

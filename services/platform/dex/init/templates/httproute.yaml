@@ -11,12 +11,26 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   parentRefs:
-    - name: {{ .Values.gateway.gatewayName }}
+    # See services/products/demo/chart/templates/httproute.yaml's comment:
+    # written explicitly to match the Gateway API's own schema defaults,
+    # avoiding permanent OutOfSync in ArgoCD.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.gatewayName }}
       namespace: {{ .Values.gateway.gatewayNamespace }}
       sectionName: https
   hostnames:
     - {{ .Values.gateway.hostname }}
   rules:
     - backendRefs:
-        - name: {{ .Values.dex.serviceName }}
+        - group: ""
+          kind: Service
+          name: {{ .Values.dex.serviceName }}
           port: {{ .Values.dex.servicePort }}
+          weight: 1
+      # Also a schema default (omitted matches means "match everything"),
+      # written explicitly for the same reason as backendRefs above.
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
