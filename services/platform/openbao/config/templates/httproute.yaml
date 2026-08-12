@@ -3,7 +3,7 @@
 # No sso-guard edge gate here, same reasoning as services/platform/argocd-config/config: OpenBao
 # authenticates natively (its own auth/oidc auth method, configured directly
 # inside OpenBao — there's no app-level "oidc.config" setting to wire up
-# from this repo, see services/platform/dex/applications/scaleway/chart.vendor.yaml's staticClients.openbao
+# from this repo, see bootstrap/values.yaml's staticClients.openbao
 # comment) and a blanket gate on the route would fight that login flow the
 # same way it did for ArgoCD's CLI/UI bootstrap.
 apiVersion: gateway.networking.k8s.io/v1
@@ -13,13 +13,27 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   parentRefs:
-    - name: {{ .Values.gateway.gatewayName }}
+    # See services/products/demo/chart/templates/httproute.yaml's comment:
+    # written explicitly to match the Gateway API's own schema defaults,
+    # avoiding permanent OutOfSync in ArgoCD.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.gatewayName }}
       namespace: {{ .Values.gateway.gatewayNamespace }}
       sectionName: https
   hostnames:
     - {{ .Values.gateway.hostname }}
   rules:
     - backendRefs:
-        - name: {{ .Values.openbaoServer.serviceName }}
+        - group: ""
+          kind: Service
+          name: {{ .Values.openbaoServer.serviceName }}
           port: {{ .Values.openbaoServer.servicePort }}
+          weight: 1
+      # Also a schema default (omitted matches means "match everything"),
+      # written explicitly for the same reason as backendRefs above.
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
 {{- end }}

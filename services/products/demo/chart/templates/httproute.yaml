@@ -6,7 +6,14 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   parentRefs:
-    - name: {{ .Values.gateway.gatewayName }}
+    # group/kind and backendRefs' group/kind/weight below: written
+    # explicitly to match the Gateway API's own schema defaults, avoiding
+    # permanent OutOfSync in ArgoCD (confirmed live 2026-08-11 — the API
+    # server fills these in on creation and ArgoCD has no built-in
+    # knowledge of this CRD's schema defaults).
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.gatewayName }}
       namespace: {{ .Values.gateway.gatewayNamespace }}
       # https only — otherwise this route would also bind to the http
       # listener and serve plaintext directly, bypassing gateway-config's
@@ -16,6 +23,15 @@ spec:
     - {{ .Values.gateway.hostname }}
   rules:
     - backendRefs:
-        - name: {{ .Release.Name }}
+        - group: ""
+          kind: Service
+          name: {{ .Release.Name }}
           port: 80
+          weight: 1
+      # Also a schema default (omitted matches means "match everything"),
+      # written explicitly for the same reason as backendRefs above.
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
 {{- end }}
