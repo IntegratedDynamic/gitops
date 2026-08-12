@@ -6,7 +6,7 @@
 # the full chain).
 namespace: wireguard
 
-# ClusterSecretStore declared by the openbao-init chart.
+# ClusterSecretStore declared by services/platform/secrets-sync/config.
 clusterSecretStoreName: openbao
 
 refreshInterval: 1h

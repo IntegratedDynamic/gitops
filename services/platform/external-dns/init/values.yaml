@@ -1,5 +1,5 @@
 # Pulls the Scaleway Domains & DNS API credentials from OpenBao into a Secret
-# that services/platform/external-dns/applications/scaleway/chart.vendor.yaml wires into the external-dns pod via
+# that bootstrap/values.yaml wires into the external-dns pod via
 # env[].valueFrom.secretKeyRef. OpenBao stays the source of truth — no
 # credential value ever lives in this repo.
 #
@@ -9,7 +9,7 @@
 # belonging to the account that owns the domain once one is bought.
 namespace: external-dns
 
-# ClusterSecretStore declared by the openbao-init chart.
+# ClusterSecretStore declared by services/platform/secrets-sync/config.
 clusterSecretStoreName: openbao
 
 openbao:
