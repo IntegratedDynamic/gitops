@@ -61,7 +61,9 @@ gitops/
 ├── services/
 │   ├── platform/                # infra: openbao, cert-manager, gateway, dex, monitoring, ...
 │   │   └── openbao/
-│   │       ├── init/            # in-house chart (restore/unseal Job, ClusterSecretStore)
+│   │       ├── init/            # in-house chart, restore-at-boot Job only — no ESO
+│   │       │                    #   coupling; the ClusterSecretStore it feeds lives in
+│   │       │                    #   services/platform/secrets-sync/config instead
 │   │       │   ├── Chart.yaml
 │   │       │   ├── values.yaml
 │   │       │   ├── values-local.yaml

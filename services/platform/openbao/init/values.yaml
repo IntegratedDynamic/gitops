@@ -26,12 +26,14 @@ s3:
   uri: ""
   extraFlag: ""
 
-# ClusterSecretStore : le pont ESO → OpenBao, partagé par tout le cluster.
-# Suppose que ces objets existent côté OpenBao (créés à la main, cf.
-# openbao-claude.md) : moteur kv-v2 monté sur `kv/`, auth kubernetes activée,
-# policy `eso-read` et rôle `external-secrets`.
-clusterSecretStore:
-  enabled: true
-  name: openbao
-  mountPath: kv
-  role: external-secrets
+# The ClusterSecretStore (ESO's cluster-wide entry point into OpenBao) used
+# to be templated here. Moved 2026-08-12 to
+# services/platform/secrets-sync/config — this chart's own restore Job has
+# nothing to do with ESO, and the ClusterSecretStore living here made its
+# ArgoCD sync-wave placement legitimately confusing to reason about (it
+# looked like it needed to run after ESO's own Helm chart, since ESO is
+# the thing that consumes it — actually false, but an easy trap; produced
+# two wrong wave orderings and a brief Terraform detour before landing on
+# secrets-sync, which is already the same wave as ESO itself). This chart
+# is now just the restore Job, fully independent of ESO's own mechanics —
+# deliberate requirement, not an accident.

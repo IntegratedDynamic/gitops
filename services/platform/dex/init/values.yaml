@@ -1,5 +1,5 @@
 # Pulls Dex's credentials from OpenBao into a Secret that
-# services/platform/dex/applications/scaleway/chart.vendor.yaml references via envVars/secretKeyRef:
+# bootstrap/values.yaml references via envVars/secretKeyRef:
 #   github-client-id / github-client-secret : the GitHub OAuth App
 #     (github.com/organizations/IntegratedDynamic/settings/applications),
 #     used by Dex's own "github" connector.
@@ -12,7 +12,7 @@
 # the other manually-managed roles/policies).
 namespace: gateway
 
-# ClusterSecretStore declared by the openbao-init chart.
+# ClusterSecretStore declared by services/platform/secrets-sync/config.
 clusterSecretStoreName: openbao
 
 openbao:
@@ -23,7 +23,7 @@ secret:
 
 refreshInterval: 1h
 
-# Service created by services/platform/dex/applications/scaleway/chart.vendor.yaml (the official dex chart,
+# Service created by bootstrap/values.yaml (the official dex chart,
 # released under the name "dex" — its fullname helper collapses to just
 # that when release name == chart name).
 dex:

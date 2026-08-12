@@ -7,8 +7,15 @@
 # Aucune valeur de secret ici — uniquement des identifiants publics et des
 # chemins. Les valeurs vivent dans OpenBao.
 
-# ClusterSecretStore déclaré par le chart openbao-init.
+# Nom du ClusterSecretStore déclaré par ce chart (templates/clustersecretstore.yaml)
+# — réutilisé tel quel comme secretStoreRef.name dans les templates
+# ci-dessous, une seule source de vérité pour le nom.
 clusterSecretStoreName: openbao
+
+clusterSecretStore:
+  baoAddr: http://openbao.openbao.svc:8200
+  mountPath: kv
+  role: external-secrets
 
 github:
   # appID / installationID sont typés int64 dans la CRD : surtout pas de

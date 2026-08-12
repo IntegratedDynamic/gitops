@@ -12,7 +12,7 @@
 # `s3cmd`-based retention cleanup (confirmed live 2026-07-28).
 namespace: velero
 
-# ClusterSecretStore declared by the openbao-init chart.
+# ClusterSecretStore declared by services/platform/secrets-sync/config.
 clusterSecretStoreName: openbao
 
 openbao:
