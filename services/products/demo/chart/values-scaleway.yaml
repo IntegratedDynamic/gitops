@@ -20,7 +20,7 @@ gateway:
   gatewayNamespace: gateway
 
 # demo is the guinea pig for GitHub org SSO — see services/platform/dex/init and
-# services/platform/dex/applications/scaleway/chart.vendor.yaml. Its callback URL is registered in Dex's
+# bootstrap/values.yaml. Its callback URL is registered in Dex's
 # staticClients.envoy-gateway.redirectURIs.
 auth:
   enabled: true
@@ -34,7 +34,7 @@ auth:
   cookieDomain: scalepack.fr
   clusterSecretStoreName: openbao
   openbaoPath: apps/dex/credentials
-  # Service created by services/platform/dex/applications/scaleway/chart.vendor.yaml — referenced directly so
+  # Service created by bootstrap/values.yaml — referenced directly so
   # OIDC discovery/token calls don't depend on external DNS (see
   # charts/sso-guard/templates/securitypolicy.yaml).
   dexServiceName: dex
@@ -43,3 +43,20 @@ auth:
   # Restricts demo further to members of this GitHub team (on top of the
   # org-wide login gate) — see charts/sso-guard/templates/securitypolicy.yaml.
   requiredGroup: "IntegratedDynamic:Guest"
+
+# syncWave/affinity: wave 7 here must match this app's `wave` in
+# bootstrap/values.yaml's scalewayApps entry — see
+# services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+# the same fix.
+syncWave: "7"
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: scalepack.fr/sync-wave
+                operator: In
+                values: ["7"]
+          topologyKey: kubernetes.io/hostname

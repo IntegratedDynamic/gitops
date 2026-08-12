@@ -50,6 +50,15 @@
 # see infra repo's 05-secrets/openbao/{bootstrap,managed}/version.tf.
 namespace: wireguard
 
+# Soft "don't stack on other pods from this same sync-wave" pod label +
+# rule (see templates/deployment.yaml) — see
+# services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+# the same fix. Safe empty defaults here; the real wave number and rule
+# are set per-env (e.g. values-scaleway.yaml), matching this app's `wave`
+# in that env's bootstrap/values.yaml scalewayApps entry.
+syncWave: "0"
+affinity: {}
+
 # The domain the dns sidecar answers for (see templates/deployment.yaml) —
 # every *.scalepack.fr hostname resolves to server.address while the
 # tunnel is up.
@@ -95,7 +104,7 @@ proxyTargets: {}
 # This chart was the one exception that already had explicit per-container
 # resources missing entirely (not even a chart default: we own this
 # template). Confirmed live 2026-08-11 alongside every other requestless
-# platform chart — see cert-manager/applications/scaleway/chart.vendor.yaml's
+# platform chart — see services/platform/cert-manager/chart/values-scaleway.yaml's
 # comment for the full incident. Every container here is a thin proxy/init
 # step, so these all stay small — except where noted below.
 #

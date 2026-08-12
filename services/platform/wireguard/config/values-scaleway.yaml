@@ -1,6 +1,20 @@
-# No overrides needed — the peer list used to be hardcoded here, replaced
-# by services/platform/wireguard/init's wireguard-peers Secret (synced from
+# The peer list used to be hardcoded here, replaced by
+# services/platform/wireguard/init's wireguard-peers Secret (synced from
 # OpenBao, itself sourced from the infra repo's 04-vpn/wireguard state).
-# Kept as an empty file so this chart follows the same
-# applications/scaleway -> values-scaleway.yaml convention as every other
-# chart in this repo, in case a real override shows up later.
+#
+# syncWave/affinity: wave 5 here must match this app's `wave` in
+# bootstrap/values.yaml's scalewayApps entry — see
+# services/platform/cert-manager/chart/values-scaleway.yaml's comment on
+# the same fix.
+syncWave: "5"
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: scalepack.fr/sync-wave
+                operator: In
+                values: ["5"]
+          topologyKey: kubernetes.io/hostname
