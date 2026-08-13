@@ -30,4 +30,11 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          - name: {{ .Values.wildcardCertSecretName }}
+          # group/kind: schema defaults (Secret in the core group), written
+          # explicitly so this matches what the API server fills in on
+          # creation — same fix as
+          # services/products/demo/chart/templates/httproute.yaml's
+          # backendRefs, otherwise ArgoCD shows permanent OutOfSync.
+          - group: ""
+            kind: Secret
+            name: {{ .Values.wildcardCertSecretName }}

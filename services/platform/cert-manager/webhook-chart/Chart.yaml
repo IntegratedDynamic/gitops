@@ -6,7 +6,7 @@ description: Wrapper chart pulling in the vendor scaleway-certmanager-webhook
   old, uncoordinated services-vendor-scaleway/services-app-scaleway split. Unlike the main
   cert-manager chart, this one DOES consume an OpenBao-sourced Secret
   (scaleway-dns-credentials, materialized by
-  services/platform/cert-manager/webhook-init) — same class of race as
+  services/platform/cert-manager/webhook-secret) — same class of race as
   Velero/external-dns/Dex/Grafana, just not caught in the first pass since
   this chart reads it via a different values key
   (secret.externalSecretName, not existingSecret/secretKeyRef). Stage "eso",

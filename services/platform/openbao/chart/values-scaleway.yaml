@@ -5,37 +5,34 @@ openbao:
   server:
     ha:
       enabled: false
-    # Soft "don't stack on other pods from this same sync-wave" — every
+    # Soft "spread pods from this same sync-wave across nodes" — every
     # chart in this repo gets the same pattern (see e.g.
     # services/platform/cert-manager/chart/values-scaleway.yaml's comment
-    # on the same fix), scoped to wave via the scalepack.fr/sync-wave pod
-    # label (extraLabels below) rather than a blanket "avoid every
-    # Helm-managed pod forever" rule — the actual problem is contention
-    # between pods that start *together* (same wave), not steady-state
-    # bin-packing in general, which the scheduler should stay free to do
-    # once the cluster is up. Preferred, not required: with only 2 nodes,
-    # a hard rule would leave pods unschedulable whenever the pool is down
-    # to 1 node. The wave number here (0) must match this app's `wave` in
-    # bootstrap/values.yaml's scalewayApps entry — no cross-file reference
-    # mechanism, so it's a manual pair to keep in sync if either changes.
-    # This chart's own default here (self-anti-affinity against other
-    # openbao server replicas) is a no-op anyway since ha.enabled is false
-    # — replaced rather than merged, since this field is a raw string, not
-    # a map. Currently a no-op either way (wave 0 has no other apps in it)
-    # — kept for consistency/future-proofing if that ever changes.
+    # on the same fix), via topologySpreadConstraints' matchLabelKeys
+    # (K8s 1.27+): the scheduler looks up scalepack.fr/sync-wave on the
+    # pod being scheduled itself and ANDs it into the selector, so this
+    # constraint stays generic — no wave number embedded here at all, only
+    # in extraLabels below. ScheduleAnyway (not DoNotSchedule): with only
+    # 2 nodes, a hard requirement would leave pods unschedulable whenever
+    # the pool is down to 1 node.
+    #
+    # extraLabels' value here is a fallback default, not the source of
+    # truth — bootstrap/templates/scaleway.yaml injects this app's real
+    # `wave` from bootstrap/values.yaml via source.helm.parameters
+    # (see that app's `syncWaveLabelPaths` entry), overriding it. Set to
+    # "-1" (not a real wave — waves start at 0) rather than a
+    # plausible-looking number, so a standalone `helm template` run makes
+    # the un-injected fallback obviously wrong instead of silently
+    # matching production.
     extraLabels:
-      scalepack.fr/sync-wave: "0"
-    affinity: |
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 50
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: scalepack.fr/sync-wave
-                    operator: In
-                    values: ["0"]
-              topologyKey: kubernetes.io/hostname
+      scalepack.fr/sync-wave: "-1"
+    topologySpreadConstraints: |
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        matchLabelKeys:
+          - scalepack.fr/sync-wave
+        labelSelector: {}
     # AWS credentials the awskms seal authenticates with. OpenBao must read
     # these at startup to unseal — they cannot come from OpenBao itself
     # (chicken-and-egg). Secret created out-of-band by 02-cluster/scaleway

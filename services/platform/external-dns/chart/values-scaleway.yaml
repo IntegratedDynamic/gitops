@@ -13,7 +13,7 @@ external-dns:
     - service
     - gateway-httproute
 
-  # Credentials materialized by services/platform/external-dns/init from
+  # Credentials materialized by services/platform/external-dns/secret from
   # OpenBao (see bootstrap/values.yaml).
   env:
     - name: SCW_ACCESS_KEY
@@ -48,20 +48,20 @@ external-dns:
       cpu: 50m
       memory: 64Mi
 
-  # Soft "don't stack on other pods from this same sync-wave" (wave 5
-  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # Soft "spread pods from this same sync-wave across nodes" — see
   # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
-  # the same fix.
+  # the same fix. podLabels' value is a fallback default, not the source
+  # of truth — bootstrap/templates/scaleway.yaml injects this app's real
+  # `wave` here (see this app's `syncWaveLabelPaths` entry in
+  # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+  # plausible-looking number, so a standalone render makes the
+  # un-injected fallback obvious instead of silently matching production.
   podLabels:
-    scalepack.fr/sync-wave: "5"
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 50
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: scalepack.fr/sync-wave
-                  operator: In
-                  values: ["5"]
-            topologyKey: kubernetes.io/hostname
+    scalepack.fr/sync-wave: "-1"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}

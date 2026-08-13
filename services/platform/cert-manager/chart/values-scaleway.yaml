@@ -39,43 +39,41 @@ cert-manager:
       cpu: 200m
       memory: 256Mi
 
-  # Soft "don't stack on other pods from this same sync-wave" — same
+  # Soft "spread pods from this same sync-wave across nodes" — same
   # pattern on every chart in this repo (controller here, webhook/cainjector
   # below, each chart's own long-lived pods elsewhere). Confirmed live
   # 2026-08-12: without this, the default scheduler happily piles every
   # pod that starts in the same sync-wave onto whichever of the pool's 2
   # nodes it favors first, causing resource contention there while the
-  # other node sits idle. Preferred, not required: with only 2 nodes, a
-  # hard rule would leave pods unschedulable whenever the pool is
-  # temporarily down to 1 node.
+  # other node sits idle. ScheduleAnyway, not DoNotSchedule: with only 2
+  # nodes, a hard requirement would leave pods unschedulable whenever the
+  # pool is temporarily down to 1 node.
   #
-  # Scoped to wave via the scalepack.fr/sync-wave pod label (podLabels
-  # below), not a blanket "avoid every Helm-managed pod forever" rule —
-  # the actual problem is contention between pods that start *together*
-  # (same wave), not steady-state bin-packing in general, which the
-  # scheduler should stay free to do once the cluster is up. The wave
-  # number here (5) must match this app's `wave` in bootstrap/values.yaml's
-  # scalewayApps entry — no cross-file reference mechanism, so it's a
-  # manual pair to keep in sync if either changes. Bumped from 4 to 5
-  # 2026-08-12 when envoy-gateway/gateway-config split into their own
-  # earlier wave 4 — see bootstrap/values.yaml's wave 4/5 comments.
+  # topologySpreadConstraints' matchLabelKeys (K8s 1.27+) resolves the
+  # actual wave number from the pod's own scalepack.fr/sync-wave label at
+  # schedule time, so this block never embeds a wave number itself — only
+  # podLabels below does. podLabels' value here is a fallback default, not
+  # the source of truth — bootstrap/templates/scaleway.yaml injects this
+  # app's real `wave` into each of the 3 podLabels below independently
+  # (main/webhook/cainjector each become their own map once Helm parses
+  # this file, so the YAML anchor only shares the *default*, each still
+  # needs its own override — see this app's `syncWaveLabelPaths` entry in
+  # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+  # plausible-looking number, so a standalone render makes the
+  # un-injected fallback obvious instead of silently matching production.
   podLabels: &waveLabel
-    scalepack.fr/sync-wave: "5"
-  affinity: &antiAffinity
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 50
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: scalepack.fr/sync-wave
-                  operator: In
-                  values: ["5"]
-            topologyKey: kubernetes.io/hostname
+    scalepack.fr/sync-wave: "-1"
+  topologySpreadConstraints: &waveSpread
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}
 
   webhook:
     podLabels: *waveLabel
-    affinity: *antiAffinity
+    topologySpreadConstraints: *waveSpread
     resources:
       requests:
         cpu: 10m
@@ -85,7 +83,7 @@ cert-manager:
         memory: 64Mi
   cainjector:
     podLabels: *waveLabel
-    affinity: *antiAffinity
+    topologySpreadConstraints: *waveSpread
     resources:
       requests:
         cpu: 10m

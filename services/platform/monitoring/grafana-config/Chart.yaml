@@ -1,5 +1,5 @@
 apiVersion: v2
 name: grafana-config
-description: Materializes Grafana's OIDC client secret from OpenBao and exposes it on the shared gateway
+description: Grafana's letsencrypt-staging CA bundle ConfigMap (OIDC/admin secrets moved to services/platform/monitoring/grafana-secret, HTTPRoute moved to services/platform/monitoring/grafana-gateway)
 type: application
 version: 0.1.0

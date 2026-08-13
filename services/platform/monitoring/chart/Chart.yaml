@@ -7,8 +7,8 @@ description: Wrapper chart pulling in vendor kube-prometheus-stack, so this
   bootstrap/templates/scaleway.yaml. Needed because
   Grafana here consumes grafana-admin-credentials and
   grafana-oidc-client-secret, materialized by
-  services/platform/monitoring/grafana-config (a sibling app in that same
-  graph) from OpenBao.
+  services/platform/monitoring/grafana-secret (a sibling app in that same
+  graph, wave 1) from OpenBao.
 type: application
 version: 0.1.0
 

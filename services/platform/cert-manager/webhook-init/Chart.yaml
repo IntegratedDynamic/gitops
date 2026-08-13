@@ -1,5 +1,0 @@
-apiVersion: v2
-name: cert-manager-webhook-init
-description: Materializes Scaleway DNS API credentials from OpenBao into the cert-manager namespace for the DNS01 webhook
-type: application
-version: 0.1.0

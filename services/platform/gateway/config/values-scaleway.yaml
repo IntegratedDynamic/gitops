@@ -29,7 +29,7 @@ activeClusterIssuer: letsencrypt-staging
 
 acmeEmail: nicolas.brieussel@gmail.com
 
-# Secret services/platform/cert-manager/webhook-init materializes into the cert-manager
+# Secret services/platform/cert-manager/webhook-secret materializes into the cert-manager
 # namespace (same Scaleway DNS credentials external-dns already uses).
 scalewayCredentialsSecretName: scaleway-dns-credentials
 

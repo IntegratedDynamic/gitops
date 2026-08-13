@@ -1,0 +1,9 @@
+apiVersion: v2
+name: crds
+description: Prometheus Operator CRDs, split into their own earlier-wave Application so ArgoCD's CRD health check gates kube-prometheus-stack
+type: application
+version: 0.1.0
+dependencies:
+  - name: prometheus-operator-crds
+    version: 29.0.0
+    repository: https://prometheus-community.github.io/helm-charts

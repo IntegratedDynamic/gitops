@@ -12,14 +12,13 @@ resources:
     cpu: 250m
     memory: 256Mi
 
-# Soft "don't stack on other pods from this same sync-wave" pod label +
-# rule (see templates/deployment.yaml) — see
-# services/platform/cert-manager/chart/values-scaleway.yaml's comment on
-# the same fix. Safe empty defaults here; the real wave number and rule
-# are set per-env (e.g. values-scaleway.yaml), matching this app's `wave`
-# in that env's bootstrap/values.yaml scalewayApps entry.
+# Soft "spread pods from this same sync-wave across nodes" pod label
+# (see templates/deployment.yaml, which hardcodes the actual
+# topologySpreadConstraints — matchLabelKeys needs no wave-number value).
+# Safe empty default here; the real wave number is injected per-env by
+# bootstrap/templates/scaleway.yaml from that env's bootstrap/values.yaml
+# scalewayApps entry (see this app's `syncWaveLabelPaths`).
 syncWave: "0"
-affinity: {}
 
 ingress:
   enabled: true

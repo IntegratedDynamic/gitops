@@ -19,7 +19,7 @@ gateway:
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 
-# demo is the guinea pig for GitHub org SSO — see services/platform/dex/init and
+# demo is the guinea pig for GitHub org SSO — see services/platform/dex/gateway and
 # bootstrap/values.yaml. Its callback URL is registered in Dex's
 # staticClients.envoy-gateway.redirectURIs.
 auth:
@@ -44,19 +44,12 @@ auth:
   # org-wide login gate) — see charts/sso-guard/templates/securitypolicy.yaml.
   requiredGroup: "IntegratedDynamic:Guest"
 
-# syncWave/affinity: wave 7 here must match this app's `wave` in
-# bootstrap/values.yaml's scalewayApps entry — see
-# services/platform/cert-manager/chart/values-scaleway.yaml's comment on
-# the same fix.
-syncWave: "7"
-affinity:
-  podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 50
-        podAffinityTerm:
-          labelSelector:
-            matchExpressions:
-              - key: scalepack.fr/sync-wave
-                operator: In
-                values: ["7"]
-          topologyKey: kubernetes.io/hostname
+# syncWave: fallback default, not the source of truth —
+# bootstrap/templates/scaleway.yaml injects this app's real `wave` here
+# (see this app's `syncWaveLabelPaths` entry in bootstrap/values.yaml).
+# The anti-affinity itself is hardcoded in templates/deployment.yaml now
+# (topologySpreadConstraints' matchLabelKeys needs no wave-number value).
+# Set to "-1" (not a real wave) rather than a plausible-looking number,
+# so a standalone render makes the un-injected fallback obvious instead
+# of silently matching production.
+syncWave: "-1"

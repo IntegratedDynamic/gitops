@@ -1,0 +1,5 @@
+apiVersion: v2
+name: dex-gateway
+description: Exposes Dex at auth.scalepack.fr via HTTPRoute (credentials ExternalSecret moved to services/platform/dex/secret)
+type: application
+version: 0.1.0

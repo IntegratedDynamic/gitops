@@ -1,0 +1,15 @@
+enabled: true
+
+namespace: monitoring
+
+gateway:
+  hostname: grafana.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
+
+# Service created by the kube-prometheus-stack chart's bundled grafana
+# subchart (bootstrap/values.yaml), release name
+# "kube-prometheus-stack" — matches that chart's fullname convention.
+grafanaServer:
+  serviceName: kube-prometheus-stack-grafana
+  servicePort: 80

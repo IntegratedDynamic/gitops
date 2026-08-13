@@ -2,15 +2,13 @@ enabled: true
 
 namespace: argocd
 
-gateway:
-  hostname: argocd.scalepack.fr
-  gatewayName: scaleway-gateway
-  gatewayNamespace: gateway
-
 # Service created by the argo-cd chart (helm_release.argocd in the
-# infrastructure repo) — server.insecure is set there, so plain HTTP on
-# this port carries both the UI and the API, same as every other backend
-# behind the gateway.
+# infrastructure repo). Needed here for restart-hook.yaml's `kubectl
+# rollout restart` target — duplicated in services/platform/argocd-config/
+# gateway's own values-scaleway.yaml, which needs the same serviceName for
+# its HTTPRoute backendRef. No cross-chart values-sharing mechanism in
+# this repo (same tradeoff every clusterSecretStoreName duplication
+# elsewhere already accepts).
 argocdServer:
   serviceName: argocd-server
   servicePort: 80

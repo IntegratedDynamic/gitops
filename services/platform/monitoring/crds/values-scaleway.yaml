@@ -1,0 +1,5 @@
+# No overrides needed — every CRD is enabled by chart default, and this
+# repo only manages a single Kapsule cluster, so there's no per-env split
+# to make. Kept as an empty file so this chart follows the same
+# applications/scaleway -> values-scaleway.yaml convention as every other
+# chart in this repo, in case a divergence shows up later.

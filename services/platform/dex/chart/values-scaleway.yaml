@@ -29,7 +29,7 @@
 # its role_attribute_path mapping the IntegratedDynamic:Admin group (this
 # same "groups" claim sso-guard already reads) to Grafana's Admin org role,
 # everyone else falling back to Viewer. Secret materialized into the
-# monitoring namespace by services/platform/monitoring/grafana-config, mirroring services/platform/argocd-config/config.
+# monitoring namespace by services/platform/monitoring/grafana-secret, mirroring services/platform/dex/secret.
 #
 # staticClients.openbao is different again: OpenBao has no app-level "OIDC
 # provider" setting like ArgoCD/Grafana — it's a dedicated JWT/OIDC *auth
@@ -39,11 +39,12 @@
 # redirect URIs are required: the UI's fixed callback path
 # (/ui/vault/auth/<mount>/oidc/callback, mount = "oidc") and the CLI's
 # default `bao login -method=oidc` callback (localhost:8250). See
-# services/platform/openbao/config for the HTTPRoute exposing openbao.scalepack.fr.
+# services/platform/openbao/gateway for the HTTPRoute exposing openbao.scalepack.fr.
 #
 # Credentials (GitHub client id/secret, the static client secret) come from
-# OpenBao via services/platform/dex/init — same sync-wave (5) as this
-# chart in bootstrap/values.yaml, both part of the "platform" wave.
+# OpenBao via services/platform/dex/secret — wave 1 in bootstrap/values.yaml
+# (alongside secrets-sync/ESO), not this chart's own wave 6, so ESO has the
+# maximum possible buffer to sync the real Secret before this pod starts.
 #
 # Values below nest under `dex:` because this chart is a thin wrapper
 # declaring the real Dex chart as a dependency (see chart/Chart.yaml) — Helm
@@ -150,20 +151,20 @@ dex:
       cpu: 100m
       memory: 64Mi
 
-  # Soft "don't stack on other pods from this same sync-wave" (wave 5
-  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # Soft "spread pods from this same sync-wave across nodes" — see
   # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
-  # the same fix.
+  # the same fix. podLabels' value is a fallback default, not the source
+  # of truth — bootstrap/templates/scaleway.yaml injects this app's real
+  # `wave` here (see this app's `syncWaveLabelPaths` entry in
+  # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+  # plausible-looking number, so a standalone render makes the
+  # un-injected fallback obvious instead of silently matching production.
   podLabels:
-    scalepack.fr/sync-wave: "5"
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 50
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: scalepack.fr/sync-wave
-                  operator: In
-                  values: ["5"]
-            topologyKey: kubernetes.io/hostname
+    scalepack.fr/sync-wave: "-1"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}

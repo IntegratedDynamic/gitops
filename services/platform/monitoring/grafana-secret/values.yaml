@@ -1,0 +1,23 @@
+# Pulls Grafana's OIDC client secret + bootstrap admin credentials from
+# OpenBao. Split out of services/platform/monitoring/grafana-config
+# 2026-08-13, moved to wave 1 (see bootstrap/values.yaml's wave-1 comment)
+# — same fix as every other <product>/secret chart: give ESO the earliest
+# possible wave to sync the real Secret, before kube-prometheus-stack
+# (wave 7) needs to mount it.
+namespace: monitoring
+
+# Grafana's own OIDC client, registered in bootstrap/values.yaml
+# (staticClients.grafana). The secret this ExternalSecret creates is
+# referenced by bootstrap/values.yaml's grafana.envValueFrom as
+# GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET.
+oidcSecret:
+  name: grafana-oidc-client-secret
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/dex/credentials
+
+# Bootstrap admin identity — see templates/externalsecret-admin.yaml for
+# why this exists despite no human being meant to use it.
+adminSecret:
+  name: grafana-admin-credentials
+  clusterSecretStoreName: openbao
+  openbaoPath: apps/grafana/admin

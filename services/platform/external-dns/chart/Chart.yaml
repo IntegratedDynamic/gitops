@@ -5,7 +5,7 @@ description: Wrapper chart pulling in vendor external-dns, so this deployment
   instead of the old, uncoordinated services-vendor-scaleway/services-app-scaleway split — see
   bootstrap/templates/scaleway.yaml. Needed because this chart consumes
   external-dns-scaleway-credentials, materialized by
-  services/platform/external-dns/init (a sibling app in that same graph)
+  services/platform/external-dns/secret (a sibling app in that same graph)
   from OpenBao.
 type: application
 version: 0.1.0

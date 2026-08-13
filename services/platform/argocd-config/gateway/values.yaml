@@ -1,0 +1,4 @@
+# Disabled by default — this chart only makes sense where ArgoCD itself
+# talks OIDC natively to our shared Dex (scaleway only, see values-scaleway.yaml
+# and the infrastructure repo's 02-cluster/scaleway/argocd.tf).
+enabled: false

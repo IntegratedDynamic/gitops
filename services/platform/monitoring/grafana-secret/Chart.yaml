@@ -1,0 +1,5 @@
+apiVersion: v2
+name: grafana-secret
+description: Materializes Grafana's OIDC client + admin credentials from OpenBao into the monitoring namespace
+type: application
+version: 0.1.0
