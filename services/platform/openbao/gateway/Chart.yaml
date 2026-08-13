@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openbao-gateway
+description: Exposes the OpenBao UI on the shared gateway, protected by OpenBao's own native OIDC auth method against the shared Dex
+type: application
+version: 0.1.0

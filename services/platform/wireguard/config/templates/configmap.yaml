@@ -1,5 +1,5 @@
 # Non-secret half of wg0.conf ([Interface] only). The private key comes
-# from the Secret services/platform/wireguard/init materializes; [Peer]
+# from the Secret services/platform/wireguard/secret materializes; [Peer]
 # blocks come from that same init chart's wireguard-peers Secret — both
 # combined by an initContainer at pod start (see deployment.yaml), never
 # by Helm/ArgoCD, since ArgoCD's rendering has no access to a Secret's

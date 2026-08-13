@@ -19,27 +19,33 @@ external-secrets:
       cpu: 100m
       memory: 128Mi
 
-  # Soft "don't stack on other pods from this same sync-wave" (wave 1
-  # here — must match this app's `wave` in bootstrap/values.yaml) — see
+  # Soft "spread pods from this same sync-wave across nodes" — see
   # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
-  # the same fix.
+  # the same fix. podLabels' value here is a fallback default, not the
+  # source of truth — bootstrap/templates/scaleway.yaml injects this
+  # app's real `wave` into each of the 3 podLabels below independently
+  # (see this app's `syncWaveLabelPaths` entry in bootstrap/values.yaml) —
+  # the YAML anchor only shares the *default*, each becomes its own
+  # independent map once Helm parses this file, so each still needs its
+  # own override. topologySpreadConstraints has no wave number embedded
+  # at all (matchLabelKeys resolves it from the pod's own label), so that
+  # part of the anchor never needs touching. Set to "-1" (not a real
+  # wave) rather than a plausible-looking number, so a standalone render
+  # makes the un-injected fallback obvious instead of silently matching
+  # production.
   podLabels: &waveLabel
-    scalepack.fr/sync-wave: "2"
-  affinity: &antiAffinity
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 50
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: scalepack.fr/sync-wave
-                  operator: In
-                  values: ["2"]
-            topologyKey: kubernetes.io/hostname
+    scalepack.fr/sync-wave: "-1"
+  topologySpreadConstraints: &waveSpread
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}
 
   webhook:
     podLabels: *waveLabel
-    affinity: *antiAffinity
+    topologySpreadConstraints: *waveSpread
     resources:
       requests:
         cpu: 10m
@@ -49,7 +55,7 @@ external-secrets:
         memory: 96Mi
   certController:
     podLabels: *waveLabel
-    affinity: *antiAffinity
+    topologySpreadConstraints: *waveSpread
     resources:
       requests:
         cpu: 10m

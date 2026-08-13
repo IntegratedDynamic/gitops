@@ -4,7 +4,7 @@ description: Wrapper chart pulling in vendor Velero, so this deployment can go
   as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list)
   instead of the old, uncoordinated services-vendor-scaleway/services-app-scaleway split — see
   bootstrap/templates/scaleway.yaml. Needed because this chart consumes
-  velero-scaleway-credentials, materialized by services/platform/velero/init
+  velero-scaleway-credentials, materialized by services/platform/velero/secret
   (a sibling app in that same graph) from OpenBao.
 type: application
 version: 0.1.0

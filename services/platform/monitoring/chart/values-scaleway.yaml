@@ -13,7 +13,7 @@ kube-prometheus-stack:
     # disabling it 401'd them, confirmed live). What actually keeps
     # this from being a human-usable admin/root account: the
     # password is randomly generated in OpenBao and never known to
-    # any human (see services/platform/monitoring/grafana-config's admin ExternalSecret),
+    # any human (see services/platform/monitoring/grafana-secret's admin ExternalSecret),
     # and grafana.ini's disable_login_form below hides the UI form
     # so OIDC via Dex is the only realistic way in for a person.
     admin:
@@ -44,12 +44,31 @@ kube-prometheus-stack:
     # whenever the pool is temporarily down to 1 node.
     #
     # podLabels/the second affinity term: "don't stack on other pods from
-    # this same sync-wave" (wave 5 here — must match this app's `wave` in
-    # bootstrap/values.yaml) — see
+    # this same sync-wave" — see
     # services/platform/cert-manager/chart/values-scaleway.yaml's comment
-    # on the same fix.
+    # on the same fix. This subchart doesn't expose topologySpreadConstraints
+    # (checked its values schema directly, unlike prometheus.prometheusSpec
+    # below), so it stays on podAntiAffinity, unlike most other charts in
+    # this repo.
+    #
+    # podLabels is a fallback default, not the source of truth —
+    # bootstrap/templates/scaleway.yaml injects this app's real `wave`
+    # here (see this app's `syncWaveLabelPaths` entry in
+    # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+    # plausible-looking number, so a standalone render makes the
+    # un-injected fallback obvious instead of silently matching
+    # production. The "7" inside the affinity block below is DIFFERENT —
+    # it's NOT a fallback, it's the actual value always used: it's an
+    # array element (preferredDuringSchedulingIgnoredDuringExecution[1]),
+    # and overriding into a specific array index by position is fragile
+    # (silently wrong if this array is ever reordered) rather than just
+    # unsupported like the other cases in this file, so it stays a plain
+    # manually-kept-in-sync literal, same as before this file's charts
+    # started centralizing this value — do NOT set it to "-1", it would
+    # permanently break this rule's anti-stacking intent, not just make a
+    # standalone render obviously wrong.
     podLabels:
-      scalepack.fr/sync-wave: "5"
+      scalepack.fr/sync-wave: "-1"
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -70,12 +89,12 @@ kube-prometheus-stack:
                 matchExpressions:
                   - key: scalepack.fr/sync-wave
                     operator: In
-                    values: ["5"]
+                    values: ["7"]
               topologyKey: kubernetes.io/hostname
 
     # Native OIDC against our shared Dex (bootstrap/values.yaml,
     # staticClients.grafana), exposed at grafana.scalepack.fr by
-    # services/platform/monitoring/grafana-config — mirrors how ArgoCD/OpenBao talk to Dex
+    # services/platform/monitoring/grafana-gateway — mirrors how ArgoCD/OpenBao talk to Dex
     # natively instead of going through Envoy Gateway's SecurityPolicy.
     # client_secret comes in via envValueFrom below rather than here,
     # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
@@ -141,9 +160,21 @@ kube-prometheus-stack:
       # to the prometheus pods themselves (unlike top-level podLabels
       # elsewhere in this file, this CRD-based component uses its own
       # key — see the chart's own values.yaml comment on podMetadata).
+      # Fallback default, not the source of truth — see this app's
+      # `syncWaveLabelPaths` entry in bootstrap/values.yaml. Set to "-1"
+      # (not a real wave) rather than a plausible-looking number, so a
+      # standalone render makes the un-injected fallback obvious instead
+      # of silently matching production.
       podMetadata:
         labels:
-          scalepack.fr/sync-wave: "5"
+          scalepack.fr/sync-wave: "-1"
+      # Anti-grafana stays podAntiAffinity (a specific-app repulsion, not
+      # wave-based, topologySpreadConstraints doesn't fit this shape). The
+      # wave-based spread moved to topologySpreadConstraints below instead
+      # of a second affinity term — unlike grafana/prometheusOperator in
+      # this file, prometheusSpec does support topologySpreadConstraints
+      # natively (checked its values schema), and matchLabelKeys (K8s
+      # 1.27+) needs no wave number embedded here at all.
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -155,17 +186,13 @@ kube-prometheus-stack:
                       operator: In
                       values: [grafana]
                 topologyKey: kubernetes.io/hostname
-            # Lower weight than the specific anti-grafana rule above:
-            # both apply and their scores add up, this one is just a
-            # lower-priority tiebreaker.
-            - weight: 50
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: scalepack.fr/sync-wave
-                      operator: In
-                      values: ["5"]
-                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          matchLabelKeys:
+            - scalepack.fr/sync-wave
+          labelSelector: {}
       # Uses the Kapsule default StorageClass (Scaleway block storage).
       storageSpec:
         volumeClaimTemplate:
@@ -176,12 +203,22 @@ kube-prometheus-stack:
                 storage: 5Gi
 
   prometheusOperator:
-    # Soft "don't stack on other pods from this same sync-wave" (wave 6
-    # here — must match this app's `wave` in bootstrap/values.yaml) — see
+    # Soft "don't stack on other pods from this same sync-wave" — see
     # services/platform/cert-manager/chart/values-scaleway.yaml's comment
-    # on the same fix.
+    # on the same fix. Doesn't expose topologySpreadConstraints either
+    # (see grafana's comment above), stays on podAntiAffinity. podLabels
+    # is a fallback default, not the source of truth — see this app's
+    # `syncWaveLabelPaths` entry in bootstrap/values.yaml. The array-
+    # embedded "7" in affinity below stays a manually-kept-in-sync literal
+    # instead — same reasoning as grafana's comment above (array-index
+    # overrides are fragile, not just unsupported). podLabels set to "-1"
+    # (not a real wave) rather than a plausible-looking number, so a
+    # standalone render makes the un-injected fallback obvious instead of
+    # silently matching production — the array-embedded "7" below is NOT
+    # a fallback and must stay real, same caveat as grafana's comment
+    # above.
     podLabels:
-      scalepack.fr/sync-wave: "5"
+      scalepack.fr/sync-wave: "-1"
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -191,7 +228,7 @@ kube-prometheus-stack:
                 matchExpressions:
                   - key: scalepack.fr/sync-wave
                     operator: In
-                    values: ["5"]
+                    values: ["7"]
               topologyKey: kubernetes.io/hostname
 
   # DaemonSet pods are pinned to one specific node each (nodeAffinity

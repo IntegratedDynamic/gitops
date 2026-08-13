@@ -1,0 +1,5 @@
+apiVersion: v2
+name: grafana-gateway
+description: Exposes the Grafana UI at grafana.scalepack.fr via HTTPRoute on the shared gateway
+type: application
+version: 0.1.0

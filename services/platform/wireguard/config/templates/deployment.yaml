@@ -19,16 +19,25 @@ spec:
         app.kubernetes.io/name: wireguard
         scalepack.fr/sync-wave: {{ .Values.syncWave | quote }}
     spec:
-      # Soft "don't stack on other pods from this same sync-wave" — see
+      # Soft "spread pods from this same sync-wave across nodes" — see
       # services/platform/cert-manager/chart/values-scaleway.yaml's
-      # comment on the same fix. This chart is in-house (not a vendored
-      # dependency), so unlike other charts in this repo, affinity support
-      # had to be added to the template itself, not just set via values.
-      affinity: {{ .Values.affinity | toYaml | nindent 8 }}
+      # comment on the same fix. Hardcoded here (not driven by values)
+      # since matchLabelKeys (K8s 1.27+) needs no wave number at all — it
+      # resolves it from the pod's own scalepack.fr/sync-wave label above
+      # at schedule time. This chart is in-house (not a vendored
+      # dependency), so unlike other charts in this repo, this had to be
+      # added to the template itself, not just set via values.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          matchLabelKeys:
+            - scalepack.fr/sync-wave
+          labelSelector: {}
       serviceAccountName: wireguard
       initContainers:
         # Combines the non-secret template (configmap.yaml) with the private
-        # key from services/platform/wireguard/init's Secret into the actual
+        # key from services/platform/wireguard/secret's Secret into the actual
         # wg0.conf the server container reads — this has to happen at pod
         # start, not at Helm render time, since ArgoCD never sees the
         # Secret's live content.

@@ -1,0 +1,4 @@
+# Disabled by default — this chart only makes sense where Grafana talks
+# generic_oauth natively to our shared Dex (scaleway only, see
+# values-scaleway.yaml and bootstrap/values.yaml).
+enabled: false

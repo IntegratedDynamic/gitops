@@ -1,0 +1,17 @@
+# Exposes Dex at auth.scalepack.fr via HTTPRoute. Used to also materialize
+# Dex's OpenBao-sourced credentials Secret — that ExternalSecret moved to
+# services/platform/dex/secret 2026-08-13 (wave 1, alongside secrets-sync/
+# ESO, instead of racing dex's own wave for ESO to sync it).
+namespace: gateway
+
+# Service created by bootstrap/values.yaml (the official dex chart,
+# released under the name "dex" — its fullname helper collapses to just
+# that when release name == chart name).
+dex:
+  serviceName: dex
+  servicePort: 5556
+
+gateway:
+  hostname: auth.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

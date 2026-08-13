@@ -1,31 +1,3 @@
 enabled: true
 
 namespace: monitoring
-
-gateway:
-  hostname: grafana.scalepack.fr
-  gatewayName: scaleway-gateway
-  gatewayNamespace: gateway
-
-# Service created by the kube-prometheus-stack chart's bundled grafana
-# subchart (bootstrap/values.yaml), release name
-# "kube-prometheus-stack" — matches that chart's fullname convention.
-grafanaServer:
-  serviceName: kube-prometheus-stack-grafana
-  servicePort: 80
-
-# Grafana's own OIDC client, registered in bootstrap/values.yaml
-# (staticClients.grafana). The secret this ExternalSecret creates is
-# referenced by bootstrap/values.yaml's
-# grafana.envValueFrom as GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET.
-oidcSecret:
-  name: grafana-oidc-client-secret
-  clusterSecretStoreName: openbao
-  openbaoPath: apps/dex/credentials
-
-# Bootstrap admin identity — see templates/externalsecret-admin.yaml for
-# why this exists despite no human being meant to use it.
-adminSecret:
-  name: grafana-admin-credentials
-  clusterSecretStoreName: openbao
-  openbaoPath: apps/grafana/admin

@@ -1,0 +1,20 @@
+enabled: true
+
+namespace: argocd
+
+gateway:
+  hostname: argocd.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
+
+# Service created by the argo-cd chart (helm_release.argocd in the
+# infrastructure repo) — server.insecure is set there, so plain HTTP on
+# this port carries both the UI and the API, same as every other backend
+# behind the gateway. Duplicated in services/platform/argocd-config/config's
+# own values-scaleway.yaml — that chart's restart-hook.yaml needs the same
+# serviceName for its `kubectl rollout restart`, and there's no cross-chart
+# values-sharing mechanism in this repo (same tradeoff every clusterSecretStoreName
+# duplication elsewhere already accepts).
+argocdServer:
+  serviceName: argocd-server
+  servicePort: 80

@@ -6,7 +6,7 @@
 # split AND a later ApplicationSet+RollingSync attempt. sync-wave on
 # resources of one parent Application's own sync is the mechanism that
 # actually works for both first-time creation and later updates.
-{{- range .Values.scalewayApps }}
+{{- range $app := .Values.scalewayApps }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -25,6 +25,37 @@ spec:
     helm:
       valueFiles:
         - {{ .valueFile }}
+      {{- if .skipCrds }}
+      # Helm's --skip-crds: this app's CRDs are managed by a separate,
+      # earlier-wave Application instead (see this app's own comment in
+      # bootstrap/values.yaml for why) — without this, this Application
+      # would also try to own/prune the same CustomResourceDefinition
+      # objects, racing the dedicated CRDs app that's supposed to gate them.
+      skipCrds: true
+      {{- end }}
+      {{- if .syncWaveLabelPaths }}
+      # Pushes this app's own `wave` (this entry's single source of truth)
+      # into whichever nested values path(s) its chart's own values file
+      # uses for the scalepack.fr/sync-wave anti-affinity label —
+      # syncWaveLabelPaths is a list of full dotted parameter names
+      # (chart-specific, already `\.`-escaped where the label key itself
+      # contains a literal dot), so this loop stays generic across every
+      # app instead of special-casing chart shapes here. Each chart's
+      # topologySpreadConstraints then only need matchLabelKeys (see that
+      # chart's own values file) — no second wave-number copy to drift.
+      parameters:
+        {{- range .syncWaveLabelPaths }}
+        - name: {{ . }}
+          value: {{ $app.wave | quote }}
+          # Without this, Helm's --set-equivalent parameter handling
+          # guesses the value's type from its shape — a bare digit like
+          # "4" becomes a YAML/JSON integer, not a string, and Kubernetes
+          # label values must be strings. Confirmed live: omitting this
+          # rendered `scalepack.fr/sync-wave: 4` (unquoted) instead of the
+          # required `"4"`.
+          forceString: true
+        {{- end }}
+      {{- end }}
 
   # Any MutatingWebhookConfiguration's caBundle gets injected at runtime by
   # its owning chart's own cert-generation, which never matches what's in
