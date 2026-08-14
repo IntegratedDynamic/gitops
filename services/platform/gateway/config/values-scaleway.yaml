@@ -42,6 +42,14 @@ scalewayCredentialsSecretName: scaleway-dns-credentials
 # unreliable: a sibling Application's sync-wave doesn't reliably block this
 # one's, confirmed live across two rebuilds with two different root causes).
 certRestore:
+  # true here (unlike services/platform/monitoring/grafana-chart's
+  # grafanaRestore.enabled, which defaults false): this schedule has
+  # already been running long enough to have real backups — confirmed live
+  # across two real cluster rebuilds. A fresh chart/schedule with zero
+  # backup history yet should start this false instead (see that chart's
+  # own comment on the same gate) to skip the restore Job's 25-minute
+  # "wait for a backup that can't exist yet" budget for nothing.
+  enabled: true
   scheduleName: velero-cert-secrets
   namespaces:
     - cert-manager
