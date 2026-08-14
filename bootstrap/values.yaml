@@ -116,6 +116,56 @@ scalewayApps:
   - {name: dex-secret, namespace: gateway, chartPath: services/platform/dex/secret, valueFile: values.yaml, wave: "1"}
   - {name: external-dns-secret, namespace: external-dns, chartPath: services/platform/external-dns/secret, valueFile: values.yaml, wave: "1"}
   - {name: grafana-secret, namespace: monitoring, chartPath: services/platform/monitoring/grafana-secret, valueFile: values.yaml, wave: "1"}
+  # thanos-secret (2026-08-13): same ExternalSecret-only shape as every
+  # other <product>/secret chart above — the Thanos sidecar's Scaleway
+  # Object Storage credentials, consumed by kube-prometheus-stack (now
+  # wave 3, see below) via prometheus.prometheusSpec.thanos.
+  # objectStorageConfig.existingSecret.
+  - {name: thanos-secret, namespace: monitoring, chartPath: services/platform/monitoring/thanos-secret, valueFile: values.yaml, wave: "1"}
+
+  # wave 2 (2026-08-13, previously an intentionally-unused gap — see wave
+  # 1's comment history) — kube-prometheus-stack-crds, the official
+  # prometheus-community/prometheus-operator-crds chart
+  # (services/platform/monitoring/crds), pinned to the exact CRD version
+  # kube-prometheus-stack 86.1.0/operator v0.91.0 ships (chart 29.0.0 ->
+  # app v0.91.0) — NOT the same chart as kube-prometheus-stack below, a
+  # dedicated one purely for these CRDs. A separate, earlier-wave
+  # Application purely so ArgoCD's built-in CRD health check (the
+  # Established condition) gates kube-prometheus-stack (wave 3 below,
+  # skipCrds: true so it doesn't also try to own/prune these) from
+  # starting until they're genuinely ready, closing a real live-observed
+  # race: prometheus-operator checks CRD availability exactly once at pod
+  # startup (no watch, no retry), and can start a moment before these CRDs
+  # finish establishing on the API server even though ArgoCD already
+  # considers them Synced (apply-order isn't the same as establishment-
+  # latency) — confirmed live 2026-08-13, the Prometheus custom resource
+  # sat with an empty status forever, no operator log about it, no
+  # StatefulSet, only fixed by a manual operator restart. Same mechanism as
+  # gateway-config waiting on envoy-gateway/cert-manager's CRDs (wave 5's
+  # comment). Moved here from wave 6 the same day it was first added:
+  # monitoring's only real prerequisites are OpenBao + ESO (wave 0/1), not
+  # cert-manager/gateway/dex (waves 4-6) — nothing about those is actually
+  # needed for the Prometheus/Grafana pods themselves to run, only for
+  # grafana-gateway's HTTPRoute (which stays at wave 7, see that wave's
+  # comment).
+  - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "2"}
+
+  # wave 3 (2026-08-13, previously an intentionally-unused gap — see wave
+  # 1's comment history) — kube-prometheus-stack + grafana-config, moved
+  # up from wave 7 for the same reason kube-prometheus-stack-crds moved to
+  # wave 2 above: their real prerequisites are wave 2's CRDs (skipCrds:
+  # true already set) and wave 1's secrets (grafana-secret, thanos-secret)
+  # — Grafana's Service is ClusterIP (no ingress needed to run), and its
+  # OIDC-against-Dex config is a runtime login-flow dependency, not a
+  # sync-time one, so it doesn't need Dex (wave 6) up first. grafana-config
+  # bundles in here too: it's now just its TEMPORARY letsencrypt-staging CA
+  # bundle ConfigMap (its two ExternalSecrets moved to grafana-secret, wave
+  # 1, on 2026-08-13, same fix as every other <product>/secret extraction)
+  # — a pure, non-blocking prerequisite ConfigMap Grafana mounts, same
+  # "bundle a co-requisite in the same wave" tradeoff already accepted for
+  # openbao/openbao-init and velero/envoy-gateway/cert-manager above.
+  - {name: grafana-config, namespace: monitoring, chartPath: services/platform/monitoring/grafana-config, valueFile: values-scaleway.yaml, wave: "3"}
+  - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "3", skipCrds: true, syncWaveLabelPaths: ['kube-prometheus-stack.grafana.podLabels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheus.prometheusSpec.podMetadata.labels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheusOperator.podLabels.scalepack\.fr/sync-wave']}
 
   # wave 4 — velero + envoy-gateway + cert-manager (+ its Scaleway DNS01
   # ACME webhook). These three don't depend on each other at all — velero
@@ -127,9 +177,13 @@ scalewayApps:
   # CRDs, cert-manager for the cert-manager.io CRDs its ClusterIssuers
   # need. Since gateway-config already waits a full wave for all three
   # regardless of how they're split amongst themselves, merging velero in
-  # here removes a wave for free — wave "3" is intentionally left unused
-  # rather than renumbering everything from 4 onward, joining the existing
-  # unused wave "2" gap (see wave 1's comment history).
+  # here removes a wave for free — wave "3" was left unused rather than
+  # renumbering everything from 4 onward (joining what was then also an
+  # unused wave "2" gap). Both gaps got filled 2026-08-13 by
+  # kube-prometheus-stack-crds/kube-prometheus-stack moving up from waves
+  # 6/7 (see those waves' entries above) — this wave's own numbering still
+  # didn't need to shift, which was the point of leaving the gaps cheap to
+  # fill rather than renumbering.
   #
   # envoy-gateway and cert-manager only race each other softly:
   # cert-manager's own chart creates no Gateway-API-typed object (its
@@ -201,39 +255,19 @@ scalewayApps:
   - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
   - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
   - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['external-dns.podLabels.scalepack\.fr/sync-wave']}
-  # kube-prometheus-stack-crds: the official prometheus-community/
-  # prometheus-operator-crds chart (services/platform/monitoring/crds),
-  # pinned to the exact CRD version kube-prometheus-stack 86.1.0/operator
-  # v0.91.0 ships (chart 29.0.0 -> app v0.91.0) — NOT the same chart as
-  # kube-prometheus-stack below, a dedicated one purely for these CRDs. A
-  # separate, earlier-wave Application purely so ArgoCD's built-in CRD
-  # health check (the Established condition) gates kube-prometheus-stack
-  # (wave 7, skipCrds: true so it doesn't also try to own/prune these) from
-  # starting until they're genuinely ready, closing a real live-observed
-  # race: prometheus-operator checks CRD availability exactly once at pod
-  # startup (no watch, no retry), and can start a moment before these CRDs
-  # finish establishing on the API server even though ArgoCD already
-  # considers them Synced (apply-order isn't the same as establishment-
-  # latency) — confirmed live 2026-08-13, the Prometheus custom resource
-  # sat with an empty status forever, no operator log about it, no
-  # StatefulSet, only fixed by a manual operator restart. Same mechanism as
-  # gateway-config waiting on envoy-gateway/cert-manager's CRDs (wave 5's
-  # comment).
-  - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "6"}
 
-  # wave 7 — monitoring. argocd-config/openbao-gateway ride along: same
+  # wave 7 — argocd-config/openbao-gateway ride along together: same
   # prerequisite (Gateway + Dex from wave 6), no named stage of their own.
-  # grafana-gateway/argocd-config-gateway are the HTTPRoute halves split
-  # out of grafana-config/argocd-config's config chart (see wave 6's
-  # comment on the *-gateway rename) — same wave as the chart they split
-  # from, this rename didn't change any ordering. grafana-config itself
-  # is now just its TEMPORARY letsencrypt-staging CA bundle ConfigMap —
-  # its two ExternalSecrets moved to grafana-secret (wave 1, see that
-  # wave's comment) on 2026-08-13, same fix as every other <product>/secret
-  # extraction.
-  - {name: grafana-config, namespace: monitoring, chartPath: services/platform/monitoring/grafana-config, valueFile: values-scaleway.yaml, wave: "7"}
+  # argocd-config-gateway is the HTTPRoute half split out of argocd-config's
+  # config chart (see wave 6's comment on the *-gateway rename) — same wave
+  # as the chart it split from, this rename didn't change any ordering.
+  #
+  # grafana-gateway (monitoring's own HTTPRoute) also stays here — moved
+  # 2026-08-13 to be the ONLY monitoring app left in this wave (see wave
+  # 2/3 below for where the rest of monitoring went): its real dependency
+  # is the shared Gateway (wave 5) + Dex (wave 6) it binds to, same as
+  # every other *-gateway chart in this wave, not OpenBao/ESO.
   - {name: grafana-gateway, namespace: monitoring, chartPath: services/platform/monitoring/grafana-gateway, valueFile: values-scaleway.yaml, wave: "7"}
-  - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "7", skipCrds: true, syncWaveLabelPaths: ['kube-prometheus-stack.grafana.podLabels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheus.prometheusSpec.podMetadata.labels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheusOperator.podLabels.scalepack\.fr/sync-wave']}
   - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: argocd-config-gateway, namespace: argocd, chartPath: services/platform/argocd-config/gateway, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: openbao-gateway, namespace: openbao, chartPath: services/platform/openbao/gateway, valueFile: values-scaleway.yaml, wave: "7"}

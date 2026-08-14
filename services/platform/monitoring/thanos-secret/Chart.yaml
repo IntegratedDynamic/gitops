@@ -1,0 +1,5 @@
+apiVersion: v2
+name: thanos-secret
+description: Materializes the Prometheus Thanos sidecar's Scaleway Object Storage credentials from OpenBao, reshaped into Thanos's objstore.yaml format
+type: application
+version: 0.1.0

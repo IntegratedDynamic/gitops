@@ -1,0 +1,37 @@
+# Pulls Scaleway Object Storage credentials from OpenBao into a Secret in the
+# `monitoring` namespace, reshaped into the Thanos objstore.yaml format
+# prometheus-operator's Thanos sidecar expects (see
+# services/platform/monitoring/chart/values-scaleway.yaml's
+# prometheus.prometheusSpec.thanos.objectStorageConfig.existingSecret).
+# OpenBao stays the source of truth — no credential value ever lives in this
+# repo.
+#
+# The KV entry (keys SCW_ACCESS_KEY / SCW_SECRET_KEY) is managed by Terraform
+# in the infra repo (05-secrets/openbao/managed/main.tf,
+# vault_kv_secret_v2.thanos_scaleway_s3_credentials). A SEPARATE IAM key and
+# bucket from backup/velero (infra repo's 03-storage/scaleway/env/*.tfvars'
+# thanos entry) — same "one bucket, one identity, per consumer, never shared"
+# contract every other tool bucket in that root follows, and here also
+# short-lived on purpose (1-day bucket lifecycle — near-term durability, not
+# long-term queryable history, no volume needed).
+namespace: monitoring
+
+# ClusterSecretStore declared by services/platform/secrets-sync/config.
+clusterSecretStoreName: openbao
+
+openbao:
+  path: apps/monitoring/thanos-scaleway-s3-credentials
+
+secret:
+  name: thanos-objstore-config
+
+refreshInterval: 1h
+
+# Static, non-secret S3 config — kept in sync by hand with the infra repo's
+# 03-storage/scaleway/env/*.tfvars `thanos` bucket entry, same convention
+# services/platform/velero/chart/values-scaleway.yaml already uses for its
+# own s3Url/region.
+s3:
+  bucket: monitoring-thanos-dev-id
+  endpoint: s3.fr-par.scw.cloud
+  region: fr-par
