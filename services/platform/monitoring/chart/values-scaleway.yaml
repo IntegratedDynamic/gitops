@@ -216,39 +216,30 @@ kube-prometheus-stack:
             key: objstore.yaml
 
   prometheusOperator:
-    # Soft "don't stack on other pods from this same sync-wave" — see
-    # services/platform/cert-manager/chart/values-scaleway.yaml's comment
-    # on the same fix. Unlike grafana/prometheus above, this one
-    # genuinely stays on podAntiAffinity: prometheusOperator's own
+    # No "don't stack on other pods from this same sync-wave" spread
+    # here, unlike grafana/prometheus above: prometheusOperator's own
     # values schema has no topologySpreadConstraints field at all
     # (confirmed 2026-08-13 against the actually-pinned kube-prometheus-
-    # stack 86.1.0 values.yaml — grafana's equivalent belief turned out
-    # to be wrong, this one checked out). podLabels is a fallback
-    # default, not the source of truth — see this app's
-    # `syncWaveLabelPaths` entry in bootstrap/values.yaml. The array-
-    # embedded "3" in affinity below stays a manually-kept-in-sync
-    # literal as a result — array-index overrides are fragile, not just
-    # unsupported, same reasoning topologySpreadConstraints' matchLabelKeys
-    # sidesteps for grafana/prometheus. podLabels set to "-1" (not a real
-    # wave) rather than a plausible-looking number, so a standalone
-    # render makes the un-injected fallback obvious instead of silently
-    # matching production — the array-embedded "3" below is NOT a
-    # fallback and must stay real. Bumped from "7" to "3" when
-    # kube-prometheus-stack moved from wave 7 to wave 3 (bootstrap/
-    # values.yaml) — this literal must move in lockstep with that wave.
+    # stack 86.1.0 values.yaml). The only fallback would be a
+    # podAntiAffinity term with a wave number hardcoded as a literal
+    # array value — array-index overrides can't use matchLabelKeys, so
+    # that number has to be kept in sync by hand every time this chart's
+    # wave changes. Decided that tradeoff isn't worth it for one
+    # operator pod: a well-named magic number is still a magic number,
+    # and an unmaintained one silently stops doing its job instead of
+    # failing loudly. Skipping the spread entirely — no affinity block.
+    #
+    # podLabels stays despite that: independent of any affinity/spread
+    # use, it's uniform observability (see bootstrap/values.yaml's
+    # `syncWaveLabelPaths` mechanism) — every pod in this repo carries
+    # its real sync-wave as a label, useful on its own for
+    # `kubectl get pods -o wide --show-labels`-style debugging. Fallback
+    # default, not the source of truth — set to "-1" (not a real wave)
+    # rather than a plausible-looking number, so a standalone render
+    # makes the un-injected fallback obvious instead of silently
+    # matching production.
     podLabels:
       scalepack.fr/sync-wave: "-1"
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 50
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: scalepack.fr/sync-wave
-                    operator: In
-                    values: ["3"]
-              topologyKey: kubernetes.io/hostname
 
   # DaemonSet pods are pinned to one specific node each (nodeAffinity
   # on that node's own name) — unlike a Deployment pod, they can't
