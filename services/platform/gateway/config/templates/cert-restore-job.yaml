@@ -8,6 +8,7 @@
 # was still stuck. A PreSync hook is different: it's guaranteed *within
 # this Application's own* sync lifecycle — the Gateway/ClusterIssuers
 # below cannot apply until this Job exits 0.
+{{- if .Values.certRestore.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -59,3 +60,4 @@ spec:
         - name: scripts
           configMap:
             name: cert-restore
+{{- end }}

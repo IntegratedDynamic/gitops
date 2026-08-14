@@ -3,6 +3,7 @@
 # stays in `gateway` (see cert-restore-serviceaccount.yaml), only the
 # RoleBinding's own namespace differs, which is all a RoleBinding needs to
 # grant cross-namespace access.
+{{- if .Values.certRestore.enabled }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -35,3 +36,4 @@ subjects:
   - kind: ServiceAccount
     name: cert-restore
     namespace: {{ .Release.Namespace }}
+{{- end }}
