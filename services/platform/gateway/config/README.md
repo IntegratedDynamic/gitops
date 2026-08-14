@@ -1,5 +1,55 @@
 # gateway-config
 
+## The "first init" chicken-and-egg — restore hooks need a backup to already exist
+
+Every restore-before-main-sync PreSync hook in this repo (`cert-restore` here,
+`grafana-restore` in `services/platform/monitoring/grafana-chart`, `openbao-init`)
+shares the same shape: wait for a Velero `Backup` labeled with the schedule
+it cares about, then restore it, before this Application's real resources
+get created. The restore script's own budget (`templates/cert-restore-configmap.yaml`,
+~25 minutes) is designed to fail *open*, not closed — if no backup ever
+shows up, it gives up and lets the sync proceed with fresh/empty state
+rather than blocking forever. That's correct once the schedule has actual
+history behind it.
+
+It is **not** correct on the very first deploy of a brand-new schedule: a
+`Schedule` object only creates its first `Backup` on its next cron tick (up
+to an hour away for an hourly schedule), so a fresh chart/schedule has
+*zero* backup history for the entire time this hook is willing to wait —
+every sync pays the full budget for nothing, every time, until the first
+backup actually lands. This isn't a failure exactly (the hook does
+eventually give up and proceed), but it turns every rebuild into a
+25-minute wait for no reason, and — confirmed live 2026-08-14 on
+`grafana-restore` — an ArgoCD sync operation stuck mid-wait like this can
+itself get wedged (stale `operationState`, `argocd.argoproj.io/hook-finalizer`
+left on the hook Job after a forced pod deletion) badly enough to need
+manual intervention (`kubectl patch application <name> --type=merge -p
+'{"status":{"operationState":{"phase":"Failed"}}}'` to un-stick it, then
+let `selfHeal` re-sync against the real HEAD).
+
+The fix adopted here (2026-08-14, mirrors `services/platform/openbao/init`'s
+own `restore.enabled` gate): every restore hook's values expose an
+`enabled` boolean gating **all four** of its templates (`serviceaccount`,
+`configmap`, `job`, `rbac`) as a chart-wide no-op when `false`. Rule of
+thumb for setting it:
+
+- **`false`** — a schedule/chart with no backup history yet (its very
+  first deploy, or right after being added). Skip the hook entirely; there
+  is nothing to restore anyway, and skipping avoids the wasted wait (and
+  the ArgoCD-stuck-operation risk above).
+- **`true`** — a schedule that's been running long enough to have real
+  backups. `certRestore.enabled` here defaults `true` for exactly this
+  reason (confirmed live across two real cluster rebuilds); a fresh
+  `grafana-restore`-style hook should start `false` and flip to `true`
+  once `kubectl get backup -n velero -l velero.io/schedule-name=<name>`
+  shows at least one.
+
+There is no automatic way to tell "no backup yet" apart from "backup
+exists but Velero hasn't synced it into this cluster yet" from inside the
+restore script alone — that's the real chicken-and-egg, and the `enabled`
+toggle is the deliberately simple manual answer to it (a proper fix would
+need the hook to distinguish those two cases itself; not built yet).
+
 ## Manually triggering a backup for `cert-restore`
 
 `templates/cert-restore-job.yaml` is a PreSync hook that restores the
