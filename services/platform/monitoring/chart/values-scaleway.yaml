@@ -7,141 +7,19 @@ kube-prometheus-stack:
   alertmanager:
     enabled: false
 
+  # Grafana moved out (2026-08-14) to its own Application/chart —
+  # services/platform/monitoring/grafana-chart, wave 5 in
+  # bootstrap/values.yaml — because its grafana-restore-* PreSync hook
+  # (Velero PVC restore) needs the `velero` namespace/CRDs to exist first,
+  # and this whole chart runs in wave 3, before velero's wave 4. `enabled:
+  # false` here (chart default is true) is what actually stops the bundled
+  # grafana subchart's Deployment/PVC/Service/default-dashboard-and-
+  # datasource ConfigMaps from rendering at all, not just losing their
+  # value overrides — those default dashboards/datasource are now
+  # Terraform-managed instead (infrastructure repo's
+  # 06-monitoring/grafana/managed).
   grafana:
-    # auth.basic stays enabled (grafana-sc-dashboard/datasources'
-    # reload calls to Grafana's own API authenticate this same way —
-    # disabling it 401'd them, confirmed live). What actually keeps
-    # this from being a human-usable admin/root account: the
-    # password is randomly generated in OpenBao and never known to
-    # any human (see services/platform/monitoring/grafana-secret's admin ExternalSecret),
-    # and grafana.ini's disable_login_form below hides the UI form
-    # so OIDC via Dex is the only realistic way in for a person.
-    admin:
-      existingSecret: grafana-admin-credentials
-      userKey: admin-user
-      passwordKey: admin-password
-    service:
-      type: ClusterIP
-    # Grafana 13's bleve-backend search indexer (dashboards/folders/
-    # playlists) burns real CPU continuously, not just at startup —
-    # observed live pegging a full node at ~2 CPU / 94% memory with
-    # the original 50m/128Mi request and no CPU limit, which starved
-    # readiness/liveness probes (SQLite "database is locked" retries)
-    # and coincided with Dex's GitHub calls timing out mid-login.
-    resources:
-      requests:
-        cpu: 200m
-        memory: 256Mi
-      limits:
-        cpu: 750m
-        memory: 512Mi
-
-    # Soft anti-affinity against Prometheus — these two are the
-    # heaviest pods in this Application, and having both land on the
-    # same 3-vCPU node is exactly what starved probes/DNS during the
-    # incident above. "Preferred" (not "required"): with only 2 nodes
-    # in this pool, a hard rule would leave Grafana unschedulable
-    # whenever the pool is temporarily down to 1 node. Stays a specific
-    # podAntiAffinity term (not topologySpreadConstraints) because it's a
-    # named-app repulsion, not a wave-based spread — same reasoning as
-    # prometheus.prometheusSpec's own anti-grafana term below.
-    #
-    # podLabels/the wave-spread rule below: "don't stack on other pods
-    # from this same sync-wave" — see
-    # services/platform/cert-manager/chart/values-scaleway.yaml's comment
-    # on the same fix. Previously a second podAntiAffinity term with a
-    # manually-kept-in-sync array literal, on the belief that this
-    # subchart didn't expose topologySpreadConstraints — that belief was
-    # wrong (confirmed 2026-08-13 against the actually-pinned grafana/
-    # grafana chart version, values.yaml: topologySpreadConstraints IS
-    # exposed, right alongside affinity). Only prometheusOperator
-    # genuinely lacks it (see that section's own comment) — moved to a
-    # real topologySpreadConstraints block below instead, mirroring
-    # prometheus.prometheusSpec's own pattern, which removes the
-    # fragile-literal problem entirely: matchLabelKeys (K8s 1.27+) reads
-    # the wave value off this pod's own label, no number to keep in sync.
-    #
-    # podLabels is a fallback default, not the source of truth —
-    # bootstrap/templates/scaleway.yaml injects this app's real `wave`
-    # here (see this app's `syncWaveLabelPaths` entry in
-    # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
-    # plausible-looking number, so a standalone render makes the
-    # un-injected fallback obvious instead of silently matching
-    # production.
-    podLabels:
-      scalepack.fr/sync-wave: "-1"
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values: [prometheus]
-              topologyKey: kubernetes.io/hostname
-    topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        matchLabelKeys:
-          - scalepack.fr/sync-wave
-        labelSelector: {}
-
-    # Native OIDC against our shared Dex (bootstrap/values.yaml,
-    # staticClients.grafana), exposed at grafana.scalepack.fr by
-    # services/platform/monitoring/grafana-gateway — mirrors how ArgoCD/OpenBao talk to Dex
-    # natively instead of going through Envoy Gateway's SecurityPolicy.
-    # client_secret comes in via envValueFrom below rather than here,
-    # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
-    grafana.ini:
-      server:
-        root_url: https://grafana.scalepack.fr
-      auth:
-        # Hides the username/password form from the UI — doesn't
-        # touch the API (auth.basic stays enabled, see admin: above).
-        disable_login_form: true
-      auth.generic_oauth:
-        enabled: true
-        name: GitHub (Dex)
-        client_id: grafana
-        scopes: "openid profile email groups"
-        auth_url: https://auth.scalepack.fr/auth
-        token_url: https://auth.scalepack.fr/token
-        api_url: https://auth.scalepack.fr/userinfo
-        # TEMPORARY (fix/gateway-staging-ca): while
-        # services/platform/gateway/config runs letsencrypt-staging, Grafana's
-        # server-side calls above fail TLS verification against
-        # Dex's staging-signed cert ("x509: certificate signed by
-        # unknown authority", confirmed live) — the pod's system
-        # trust store has no idea about Let's Encrypt's staging CA.
-        # Points at the bundle services/platform/monitoring/grafana-config's ConfigMap mounts
-        # below. Remove both once back on letsencrypt-prod.
-        tls_client_ca: /etc/grafana/certs/letsencrypt-staging/ca-bundle.pem
-        # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
-        # rbac.policy.csv grants role:admin to — everyone else (no
-        # team, or a different team) falls back to Viewer. NOTE:
-        # several Grafana 11.1/11.2+ GitHub issues report
-        # role_attribute_path sometimes not picking up groups from
-        # the userinfo endpoint — validate this live before relying
-        # on it for anything sensitive (see OIDC.md).
-        role_attribute_path: "contains(groups[*], 'IntegratedDynamic:Admin') && 'Admin' || 'Viewer'"
-        allow_assign_grafana_admin: true
-
-    envValueFrom:
-      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
-        secretKeyRef:
-          name: grafana-oidc-client-secret
-          key: client-secret
-
-    # TEMPORARY (fix/gateway-staging-ca) — backs tls_client_ca
-    # above. ConfigMap created by services/platform/monitoring/grafana-config.
-    extraConfigmapMounts:
-      - name: letsencrypt-staging-ca
-        configMap: letsencrypt-staging-ca
-        mountPath: /etc/grafana/certs/letsencrypt-staging
-        readOnly: true
+    enabled: false
 
   prometheus:
     prometheusSpec:

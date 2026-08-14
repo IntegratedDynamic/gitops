@@ -1,0 +1,80 @@
+{{- if .Values.grafanaRestore.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-restore
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-weight: "0"
+data:
+  restore.sh: |
+    #!/usr/bin/env sh
+    set -eu
+
+    # Idempotence: once this Restore exists, Velero has already processed it
+    # (or is processing it) — never re-create it. Mirrors
+    # services/platform/gateway/config's cert-restore-configmap.yaml.
+    if kubectl get restore grafana-pvc-restore -n velero >/dev/null 2>&1; then
+      echo "Restore already exists — nothing to do."
+      exit 0
+    fi
+
+    # Wait for a completed backup to sync from the schedule. Same reasoning
+    # as cert-restore-configmap.yaml: on a fresh cluster, Backup objects
+    # haven't necessarily re-synced from the bucket yet, and a Restore
+    # created before that happens fails validation permanently.
+    #
+    # Budget ~25 min, exits 0 (success) on timeout by design — ArgoCD sees
+    # that as "hook done", not "hook failed", so it proceeds straight to
+    # creating Grafana's Deployment/PVC with nothing restored (a fresh,
+    # empty Grafana) rather than blocking a genuine first-ever bootstrap
+    # forever.
+    i=0
+    while true; do
+      if kubectl get backup -n velero -l "velero.io/schedule-name=${SCHEDULE_NAME}" --no-headers 2>/dev/null | grep -q .; then
+        break
+      fi
+      i=$((i + 1))
+      if [ "$i" -gt 150 ]; then
+        echo "No backup synced from schedule ${SCHEDULE_NAME} after budget — leaving Grafana's PVC to be created empty."
+        exit 0
+      fi
+      echo "waiting for a backup from schedule ${SCHEDULE_NAME} to sync..."
+      sleep 10
+    done
+
+    cat <<EOF | kubectl create -f -
+    {
+      "apiVersion": "velero.io/v1",
+      "kind": "Restore",
+      "metadata": {
+        "name": "grafana-pvc-restore",
+        "namespace": "velero"
+      },
+      "spec": {
+        "scheduleName": "${SCHEDULE_NAME}",
+        "includedNamespaces": ["${RESTORE_NAMESPACE}"],
+        "labelSelector": {
+          "matchLabels": {"app.kubernetes.io/name": "grafana"}
+        },
+        "includedResources": ["persistentvolumeclaims", "persistentvolumes"]
+      }
+    }
+    EOF
+
+    # Wait for it to finish — this Job is a PreSync hook of this
+    # Application, so ArgoCD will not create Grafana's own
+    # Deployment/PVC (the main Sync phase, right after) until this exits 0.
+    i=0
+    while true; do
+      phase=$(kubectl get restore grafana-pvc-restore -n velero -o jsonpath='{.status.phase}' 2>/dev/null || true)
+      case "$phase" in
+        Completed|PartiallyFailed) echo "Restore: $phase"; exit 0 ;;
+        Failed|FailedValidation) echo "Restore: $phase"; exit 1 ;;
+      esac
+      i=$((i + 1))
+      if [ "$i" -gt 60 ]; then echo "timeout waiting for Restore to finish"; exit 1; fi
+      sleep 5
+    done
+{{- end }}
