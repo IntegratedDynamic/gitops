@@ -4,25 +4,24 @@
 # against its fullname helper), not just the "grafana-data" key in
 # services/platform/velero/chart/values-scaleway.yaml.
 #
-# enabled: false for now — same chicken-and-egg gap as gateway-config's own
+# enabled: true — flipped 2026-08-14 once a real backup existed
+# (`kubectl exec -n velero deploy/velero -c velero -- /velero backup create
+# --from-schedule velero-grafana-data --wait`, confirmed Completed and
+# correctly labeled velero.io/schedule-name=velero-grafana-data). Started
+# false for the same chicken-and-egg gap as gateway-config's own
 # cert-restore (services/platform/gateway/config): the restore Job's own
 # 25-minute "wait for a synced backup, then give up and proceed empty"
-# budget assumes a backup COULD eventually show up, but on this chart's
-# very first-ever deploy there is no grafana-data Schedule history at all
-# yet (Velero hasn't had a chance to run it once) — so every fresh sync
-# pays that full 25-minute wait for nothing, every time, until a first
-# backup actually lands. Set to true once `kubectl get backup -n velero -l
-# velero.io/schedule-name=velero-grafana-data` shows at least one — from
-# then on the restore is real and worth waiting for. Mirrors the exact
-# same enabled-gate services/platform/openbao/init/values.yaml already uses
-# ("Set to false to render the chart as a no-op, e.g. environments without
-# snapshots") — not a new pattern, this repo's existing answer to exactly
-# this problem.
+# budget pays that full wait for nothing on a schedule with zero backup
+# history. Mirrors the exact same enabled-gate
+# services/platform/openbao/init/values.yaml already uses ("Set to false
+# to render the chart as a no-op, e.g. environments without snapshots") —
+# not a new pattern, this repo's existing answer to exactly this problem.
+# See services/platform/gateway/config/README.md for the full writeup.
 #
 # Stays top-level: consumed by THIS chart's own templates/grafana-restore-*.yaml,
 # not the grafana subchart.
 grafanaRestore:
-  enabled: false
+  enabled: true
   scheduleName: velero-grafana-data
   image:
     repository: alpine/kubectl
