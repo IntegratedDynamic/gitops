@@ -1,0 +1,215 @@
+# Consumed by this chart's own templates/grafana-restore-*.yaml. scheduleName
+# is the actual Schedule object name Velero creates ("<release-name>-<schedules
+# key>" — velero's own chart prepends its release name "velero", confirmed
+# against its fullname helper), not just the "grafana-data" key in
+# services/platform/velero/chart/values-scaleway.yaml.
+#
+# enabled: false for now — same chicken-and-egg gap as gateway-config's own
+# cert-restore (services/platform/gateway/config): the restore Job's own
+# 25-minute "wait for a synced backup, then give up and proceed empty"
+# budget assumes a backup COULD eventually show up, but on this chart's
+# very first-ever deploy there is no grafana-data Schedule history at all
+# yet (Velero hasn't had a chance to run it once) — so every fresh sync
+# pays that full 25-minute wait for nothing, every time, until a first
+# backup actually lands. Set to true once `kubectl get backup -n velero -l
+# velero.io/schedule-name=velero-grafana-data` shows at least one — from
+# then on the restore is real and worth waiting for. Mirrors the exact
+# same enabled-gate services/platform/openbao/init/values.yaml already uses
+# ("Set to false to render the chart as a no-op, e.g. environments without
+# snapshots") — not a new pattern, this repo's existing answer to exactly
+# this problem.
+#
+# Stays top-level: consumed by THIS chart's own templates/grafana-restore-*.yaml,
+# not the grafana subchart.
+grafanaRestore:
+  enabled: false
+  scheduleName: velero-grafana-data
+  image:
+    repository: alpine/kubectl
+    tag: "1.35.3"
+    pullPolicy: IfNotPresent
+
+# Everything below nests under `grafana:` because that's this chart's
+# dependency NAME (Chart.yaml), not because of what this wrapper chart
+# itself happens to be called — Helm only routes a parent's values into a
+# subchart when they're nested under the subchart's declared name (or
+# `global`), full stop, regardless of any coincidental name match between
+# parent and child. BUG FIXED 2026-08-14: this whole block used to sit at
+# the top level on the (wrong) theory that "this chart *is* grafana, so no
+# nesting needed" — every one of these values was silently a no-op against
+# the actual grafana subchart (confirmed live: deployed pod had
+# resources: {}, no OIDC in grafana.ini, no PVC, and was running on the
+# chart's own auto-generated `grafana` admin Secret instead of
+# grafana-admin-credentials). services/platform/monitoring/chart avoided
+# this same mistake by nesting under `kube-prometheus-stack:` — it was
+# never a *chart-name* rule, always a *dependency-name* rule, this file
+# just didn't apply it to itself.
+grafana:
+  # auth.basic stays enabled. Originally because grafana-sc-dashboard/
+  # grafana-sc-datasources' reload calls to Grafana's own API authenticated
+  # this same way (disabling it 401'd them, confirmed live) — that specific
+  # reason no longer applies post-split: dashboards/datasources are now
+  # Terraform-managed (infrastructure repo's 06-monitoring/grafana/managed,
+  # via the grafana provider's own bearer-token auth), and this chart doesn't
+  # enable either sidecar. Left enabled anyway rather than changing auth
+  # behavior as a side effect of this split — what actually keeps this from
+  # being a human-usable admin/root account is unchanged: the password is
+  # randomly generated in OpenBao and never known to any human (see
+  # services/platform/monitoring/grafana-secret's admin ExternalSecret), and
+  # grafana.ini's disable_login_form below hides the UI form so OIDC via Dex
+  # is the only realistic way in for a person. Worth revisiting on its own,
+  # separately from this split.
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+
+  # PVC-backed SQLite instead of the chart default (emptyDir) — without
+  # this, every pod restart (not just a cluster rebuild) wipes
+  # /var/lib/grafana, losing anything not re-created by
+  # 06-monitoring/grafana/managed's Terraform (unified alerting state,
+  # annotations, snapshots, ...). Grafana's own docs push HA/multi-replica
+  # setups toward an external Postgres/MySQL instead of SQLite — doesn't
+  # apply here (this is a single Grafana replica), so the proportionate
+  # fix is just giving it a real volume, backed up/restored via Velero
+  # (see services/platform/velero/chart/values-scaleway.yaml's
+  # grafana-data schedule and this chart's own grafana-restore-* PreSync
+  # hook templates) rather than standing up a whole separate DB.
+  persistence:
+    enabled: true
+    type: pvc
+    size: 2Gi
+    accessModes: [ReadWriteOnce]
+  # backup-volumes names the pod volume (not a path) Velero's node-agent
+  # should fs-backup — "storage" is the volume name the grafana chart
+  # mounts at /var/lib/grafana (confirmed against its own pod template).
+  # Paired with the grafana-data Schedule's labelSelector, which matches
+  # this pod's own app.kubernetes.io/name=grafana label.
+  podAnnotations:
+    backup.velero.io/backup-volumes: storage
+  # Grafana 13's bleve-backend search indexer (dashboards/folders/
+  # playlists) burns real CPU continuously, not just at startup —
+  # observed live pegging a full node at ~2 CPU / 94% memory with
+  # the original 50m/128Mi request and no CPU limit, which starved
+  # readiness/liveness probes (SQLite "database is locked" retries)
+  # and coincided with Dex's GitHub calls timing out mid-login.
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 750m
+      memory: 512Mi
+
+  # Soft anti-affinity against Prometheus — these two are the
+  # heaviest pods in this domain, and having both land on the
+  # same 3-vCPU node is exactly what starved probes/DNS during the
+  # incident above. Still valid post-split: Prometheus stays in
+  # services/platform/monitoring/chart, a different Application, but
+  # pod anti-affinity matches on the pod's own label regardless of which
+  # Application/release created it. "Preferred" (not "required"): with
+  # only 2 nodes in this pool, a hard rule would leave Grafana
+  # unschedulable whenever the pool is temporarily down to 1 node. Stays
+  # a specific podAntiAffinity term (not topologySpreadConstraints)
+  # because it's a named-app repulsion, not a wave-based spread — same
+  # reasoning as monitoring/chart's prometheus.prometheusSpec anti-grafana
+  # term.
+  #
+  # podLabels/the wave-spread rule below: "don't stack on other pods
+  # from this same sync-wave" — see
+  # services/platform/cert-manager/chart/values-scaleway.yaml's comment
+  # on the same fix. Hardcoded to the real wave ("5", matches this app's
+  # entry in bootstrap/values.yaml) rather than the usual "-1" fallback +
+  # bootstrap-injected syncWaveLabelPaths override — that mechanism
+  # produced a live-broken manifest here (confirmed 2026-08-14: ArgoCD
+  # applied a literal "-1" pod-template label — invalid, K8s labels can't
+  # start with "-" — even after a repo-server restart to rule out
+  # caching, across multiple fresh sync operations with the parameter
+  # verified correct in both the live Application spec and a from-scratch
+  # git clone rendered with plain `helm template`; root cause not fully
+  # confirmed, suspected Helm engine version mismatch between the CLI used
+  # to validate — v4.1.3 — and whatever ArgoCD embeds internally, since
+  # this exact pattern works elsewhere in this repo, e.g.
+  # kube-prometheus-stack's prometheus/prometheusOperator entries). Same
+  # tradeoff prometheusOperator's own podLabels comment already accepts
+  # elsewhere in this repo for a different reason (that one lacks
+  # topologySpreadConstraints support entirely) — a magic number to keep
+  # in sync by hand if this chart's wave ever changes, in exchange for
+  # not depending on a mechanism that's live-observed broken for this
+  # value.
+  podLabels:
+    scalepack.fr/sync-wave: "5"
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: [prometheus]
+            topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}
+
+  # Native OIDC against our shared Dex (bootstrap/values.yaml,
+  # staticClients.grafana), exposed at grafana.scalepack.fr by
+  # services/platform/monitoring/grafana-gateway — mirrors how ArgoCD/OpenBao talk to Dex
+  # natively instead of going through Envoy Gateway's SecurityPolicy.
+  # client_secret comes in via envValueFrom below rather than here,
+  # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
+  grafana.ini:
+    server:
+      root_url: https://grafana.scalepack.fr
+    auth:
+      # Hides the username/password form from the UI — doesn't
+      # touch the API (auth.basic stays enabled, see admin: above).
+      disable_login_form: true
+    auth.generic_oauth:
+      enabled: true
+      name: GitHub (Dex)
+      client_id: grafana
+      scopes: "openid profile email groups"
+      auth_url: https://auth.scalepack.fr/auth
+      token_url: https://auth.scalepack.fr/token
+      api_url: https://auth.scalepack.fr/userinfo
+      # TEMPORARY (fix/gateway-staging-ca): while
+      # services/platform/gateway/config runs letsencrypt-staging, Grafana's
+      # server-side calls above fail TLS verification against
+      # Dex's staging-signed cert ("x509: certificate signed by
+      # unknown authority", confirmed live) — the pod's system
+      # trust store has no idea about Let's Encrypt's staging CA.
+      # Points at the bundle services/platform/monitoring/grafana-config's ConfigMap mounts
+      # below. Remove both once back on letsencrypt-prod.
+      tls_client_ca: /etc/grafana/certs/letsencrypt-staging/ca-bundle.pem
+      # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
+      # rbac.policy.csv grants role:admin to — everyone else (no
+      # team, or a different team) falls back to Viewer. NOTE:
+      # several Grafana 11.1/11.2+ GitHub issues report
+      # role_attribute_path sometimes not picking up groups from
+      # the userinfo endpoint — validate this live before relying
+      # on it for anything sensitive (see OIDC.md).
+      role_attribute_path: "contains(groups[*], 'IntegratedDynamic:Admin') && 'Admin' || 'Viewer'"
+      allow_assign_grafana_admin: true
+
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef:
+        name: grafana-oidc-client-secret
+        key: client-secret
+
+  # TEMPORARY (fix/gateway-staging-ca) — backs tls_client_ca
+  # above. ConfigMap created by services/platform/monitoring/grafana-config.
+  extraConfigmapMounts:
+    - name: letsencrypt-staging-ca
+      configMap: letsencrypt-staging-ca
+      mountPath: /etc/grafana/certs/letsencrypt-staging
+      readOnly: true

@@ -7,9 +7,12 @@ gateway:
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 
-# Service created by the kube-prometheus-stack chart's bundled grafana
-# subchart (bootstrap/values.yaml), release name
-# "kube-prometheus-stack" — matches that chart's fullname convention.
+# Service created by services/platform/monitoring/grafana-chart (its own
+# Application since 2026-08-14, bootstrap/values.yaml's `grafana` entry,
+# wave 5 — split out of kube-prometheus-stack, see that wave's comment).
+# Release name "grafana" == chart name "grafana", so the fullname
+# convention collapses to the plain name — confirmed via `helm template`
+# against that chart, not assumed.
 grafanaServer:
-  serviceName: kube-prometheus-stack-grafana
+  serviceName: grafana
   servicePort: 80

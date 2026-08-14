@@ -24,8 +24,17 @@
 # which chokes on any object/prefix it doesn't own. See infra repo's
 # 03-backup/scaleway/main.tf (scaleway_object_bucket.velero).
 #
-# No volume snapshots (CSI plugin / node agent) — nothing in scope here
-# lives on a PV, only in Secrets.
+# No CSI volume snapshots — nothing in scope here needs a point-in-time
+# block-storage snapshot. One deliberate exception to "only Secrets" below:
+# the node agent (kopia file-system backup) is on, scoped narrowly to
+# Grafana's own PVC (services/platform/monitoring/chart's
+# kube-prometheus-stack.grafana.persistence, added once Grafana's own docs
+# made ephemeral SQLite look like the wrong default even for a single
+# instance — see that chart's values-scaleway.yaml comment). Prometheus's
+# separate PVC in the same `monitoring` namespace stays out of Velero's
+# scope on purpose (Thanos already owns that durability story) — the
+# grafana-data schedule below is namespace + labelSelector scoped
+# specifically to avoid ever touching it.
 #
 # Restoring after a rebuild is automatic: a PreSync hook Job on
 # services/platform/gateway/config (not here, and not a separate wave-ordered
@@ -33,6 +42,10 @@
 # chart's templates/cert-restore-job.yaml) waits for a completed backup to
 # sync, then restores it, before gateway-config's own Gateway/ClusterIssuers
 # get created — the thing that would otherwise trigger a fresh ACME order.
+# The grafana-data schedule below gets the same treatment, via its own
+# PreSync hook Job templated straight into
+# services/platform/monitoring/chart (grafana-restore-*.yaml) — same reason,
+# a different consuming Application.
 #
 # Values below nest under `velero:` because this chart is a thin wrapper
 # declaring the real Velero chart as a dependency (see chart/Chart.yaml) —
@@ -51,6 +64,12 @@ velero:
   credentials:
     useSecret: true
     existingSecret: velero-scaleway-credentials
+
+  # Runs kopia (not restic — this chart's default) as a DaemonSet, needed
+  # for the grafana-data schedule's file-system PVC backup below. False by
+  # default in the upstream chart; every other backup in this chart is
+  # Secrets-only (the Kubernetes API objects, no node-level agent needed).
+  deployNodeAgent: true
 
   configuration:
     # Chart default renders one blank (provider: "") VolumeSnapshotLocation
@@ -87,6 +106,24 @@ velero:
           - gateway
         includedResources:
           - secrets
+
+    # File-system (kopia) backup of Grafana's own PVC — see this file's
+    # header comment. labelSelector (not just includedNamespaces) is what
+    # keeps this off Prometheus's separate PVC in the same `monitoring`
+    # namespace: only the pod carrying app.kubernetes.io/name=grafana (and,
+    # via its backup.velero.io/backup-volumes annotation, its "storage"
+    # volume) is ever in scope. Offset 15 minutes from cert-secrets purely
+    # so the two don't contend for the same minute.
+    grafana-data:
+      schedule: "15 * * * *"
+      template:
+        ttl: "336h" # matches cert-secrets' retention
+        storageLocation: default
+        includedNamespaces:
+          - monitoring
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: grafana
 
   # Chart ships resources: {} by default (its own commented-out example
   # suggests 500m/128Mi request, 1000m/512Mi limit — scaled down here

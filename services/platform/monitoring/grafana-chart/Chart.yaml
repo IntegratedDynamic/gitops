@@ -1,0 +1,21 @@
+apiVersion: v2
+name: grafana
+description: Standalone Grafana — split out of kube-prometheus-stack (2026-08-14) so it can
+  sit in its own ArgoCD Application, in a sync-wave after Velero (wave 5, see
+  bootstrap/values.yaml) instead of wave 3. Needed because Grafana's own
+  grafana-restore-* PreSync hook (services/platform/velero/chart/values-scaleway.yaml's
+  grafana-data schedule) requires the `velero` namespace/CRDs to actually exist first —
+  living inside kube-prometheus-stack (wave 3, before velero's wave 4) made that hook
+  fail on a genuine cold rebuild. Pins the exact same `grafana` chart version
+  kube-prometheus-stack itself vendors (confirmed against that chart's own Chart.yaml
+  dependency list), so this split doesn't change Grafana's own behavior, only its
+  Application/wave placement. Dashboards and the Prometheus datasource — previously
+  free side effects of kube-prometheus-stack's *parent* chart, lost by this split — are
+  now Terraform-managed instead (infrastructure repo's 06-monitoring/grafana/managed).
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: grafana
+    version: 12.4.1
+    repository: https://grafana-community.github.io/helm-charts
