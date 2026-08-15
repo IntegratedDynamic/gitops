@@ -1,0 +1,58 @@
+# Values below nest under `tempo:` (Helm exposes a subchart's values under
+# its dependency name, see Chart.yaml) — and then under a SECOND, inner
+# `tempo:` key, because the Tempo chart itself groups its main server
+# config (storage/server/receivers/extraArgs/extraEnvFrom/resources) under
+# its own top-level `tempo:` key, distinct from sibling keys like
+# `serviceAccount:`/`service:`/`persistence:` at that chart's own root.
+# Confirmed by inspecting the vendored chart's own values.yaml directly
+# (charts/tempo-2.2.4.tgz) after a first `helm template` pass silently
+# no-op'd a single-nested `tempo.storage...` override — not a guess.
+tempo:
+  tempo:
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: monitoring-tempo-dev-id
+          endpoint: s3.fr-par.scw.cloud
+          region: fr-par
+          # Unlike Loki, Tempo's S3 client has no "fall back to the AWS
+          # env var credential chain" behavior — access_key/secret_key are
+          # literal config values. These `${VAR}` references are
+          # substituted at startup from extraEnvFrom below, via
+          # -config.expand-env=true (extraArgs). Same "credentials via
+          # env, never inline config" shape
+          # services/platform/monitoring/loki-chart uses, just wired
+          # through Tempo's own env-expansion mechanism instead of an SDK
+          # fallback.
+          access_key: "${AWS_ACCESS_KEY_ID}"
+          secret_key: "${AWS_SECRET_ACCESS_KEY}"
+
+    extraArgs:
+      config.expand-env: "true"
+    extraEnvFrom:
+      - secretRef:
+          name: tempo-s3-credentials
+
+    # Sized conservative-default, not from observed usage (no traffic yet)
+    # — revisit once real usage exists, same tradeoff
+    # services/platform/velero/chart/values-scaleway.yaml's own resources
+    # comment already accepts.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # No topologySpreadConstraints: single pod, same tradeoff
+    # services/platform/monitoring/loki-chart/values-scaleway.yaml's own
+    # comment on this already explains (mirrors kube-prometheus-stack's
+    # prometheusOperator precedent).
+
+    # receivers/ports left at chart defaults (jaeger + zipkin + otlp +
+    # opencensus, all on the single Tempo Service) — nothing sends to the
+    # unused ones, and unlike Alloy's DaemonSet this is one pod, not one
+    # per node, so the extra idle listeners aren't worth fighting the
+    # chart's `_ports.tpl` auto-derivation to strip.

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: tempo
+description: Wrapper chart pulling in vendor Tempo (monolithic mode, S3-backed), so this
+  deployment goes as a plain Application managed directly by
+  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list).
+  Consumes tempo-s3-credentials, materialized by services/platform/monitoring/tempo-secret
+  (a sibling app in that same graph) from OpenBao. Chart repo is the
+  grafana-community fork, not grafana/helm-charts — the OSS Tempo chart migrated
+  there 2026-01-30, same move services/platform/monitoring/grafana-chart already
+  made for Grafana itself.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: tempo
+    version: 2.2.4
+    repository: https://grafana-community.github.io/helm-charts

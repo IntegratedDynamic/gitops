@@ -1,0 +1,5 @@
+apiVersion: v2
+name: loki-secret
+description: Materializes Loki's Scaleway Object Storage credentials from OpenBao, reshaped into the AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env vars Loki's S3 client falls back to when its own config keys are left unset
+type: application
+version: 0.1.0

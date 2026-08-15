@@ -1,0 +1,5 @@
+apiVersion: v2
+name: tempo-secret
+description: Materializes Tempo's Scaleway Object Storage credentials from OpenBao, reshaped into the AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env vars Tempo's config-file env-expansion (-config.expand-env=true) substitutes into storage.trace.s3.access_key/secret_key
+type: application
+version: 0.1.0

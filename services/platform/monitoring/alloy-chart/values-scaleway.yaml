@@ -1,0 +1,70 @@
+# Values below nest under `alloy:` because this chart is a thin wrapper
+# declaring the real Alloy chart as a dependency (see Chart.yaml) — Helm
+# only exposes a subchart the values under its dependency name.
+alloy:
+  # controller.type already defaults to "daemonset" (chart default) — one
+  # Alloy pod per node, which is the whole point (discover + tail every
+  # pod on that node). No override needed.
+
+  # rbac.create defaults to true, and the chart's own default rbac.rules
+  # already grants everything discovery.kubernetes (role: pod) and
+  # loki.source.kubernetes below need — including pods/log get access, via
+  # the Kubernetes API, no hostPath mount (confirmed by inspecting the
+  # vendored chart's own values.yaml directly, charts/alloy-1.11.1.tgz, not
+  # a guess). Nothing to override here.
+
+  alloy:
+    configMap:
+      content: |-
+        // Discover every pod on this node.
+        discovery.kubernetes "pods" {
+          role = "pod"
+        }
+
+        discovery.relabel "pods" {
+          targets = discovery.kubernetes.pods.targets
+
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "pod"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "container"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_node_name"]
+            target_label  = "node"
+          }
+        }
+
+        // loki.source.kubernetes tails via the Kubernetes API (like
+        // `kubectl logs -f`), not a hostPath mount — no node filesystem
+        // access, no privileged securityContext.
+        loki.source.kubernetes "pods" {
+          targets    = discovery.relabel.pods.output
+          forward_to = [loki.write.default.receiver]
+        }
+
+        loki.write "default" {
+          endpoint {
+            url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+          }
+        }
+
+  # Sized conservative-default, not from observed usage (no traffic yet) —
+  # revisit once real usage exists, same tradeoff
+  # services/platform/velero/chart/values-scaleway.yaml's own resources
+  # comment already accepts. Per-node (DaemonSet), so kept deliberately
+  # small — this multiplies by node count, unlike every other chart here.
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
