@@ -13,6 +13,15 @@ loki:
   loki:
     auth_enabled: false
 
+    # commonConfig.replication_factor defaults to 3 (built for the
+    # SimpleScalable/Distributed HA modes) — with a single SingleBinary
+    # replica, that leaves the ring quorum permanently unsatisfiable.
+    # Caught live (2026-08-15): every query/push failed with "too many
+    # unhealthy instances in the ring" / "at least 2 live replicas
+    # required, could only find 1". 1 replica needs replication_factor: 1.
+    commonConfig:
+      replication_factor: 1
+
     storage:
       type: s3
       bucketNames:
