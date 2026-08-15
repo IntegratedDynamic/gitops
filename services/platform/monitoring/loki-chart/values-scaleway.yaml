@@ -51,8 +51,16 @@ loki:
     # repo's 03-storage/scaleway/env/*.tfvars loki entry) — no point
     # keeping Loki's own index/chunk retention longer than the bucket that
     # backs it.
+    #
+    # delete_request_store: caught live (2026-08-15), not in the original
+    # pass — Loki refuses to start with retention_enabled: true unless a
+    # delete-request store is also configured ("CONFIG ERROR: invalid
+    # compactor config: compactor.delete-request-store should be
+    # configured when retention is enabled"). Set to the same backend as
+    # everything else here — matches schemaConfig's object_store above.
     compactor:
       retention_enabled: true
+      delete_request_store: s3
     limits_config:
       retention_period: 720h
 
