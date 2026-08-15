@@ -47,10 +47,12 @@ loki:
             period: 24h
 
     # Compaction + retention both need enabling explicitly — off by
-    # default. 720h (30d) matches the loki bucket's own lifecycle (infra
-    # repo's 03-storage/scaleway/env/*.tfvars loki entry) — no point
-    # keeping Loki's own index/chunk retention longer than the bucket that
-    # backs it.
+    # default. 24h (1d) matches the loki bucket's own lifecycle (infra
+    # repo's 03-storage/scaleway/env/*.tfvars loki entry) and Tempo's own
+    # chart-default retention (services/platform/monitoring/tempo-chart —
+    # tempo.tempo.retention: 24h, unset here since the default already
+    # matches) — near-term durability only, same call as Thanos's own
+    # bucket, not long-term queryable history.
     #
     # delete_request_store: caught live (2026-08-15), not in the original
     # pass — Loki refuses to start with retention_enabled: true unless a
@@ -62,7 +64,7 @@ loki:
       retention_enabled: true
       delete_request_store: s3
     limits_config:
-      retention_period: 720h
+      retention_period: 24h
 
   # nginx reverse-proxy in front of Loki, on by default — disabled here:
   # one less pod on a pool that's already tight, and SingleBinary mode's
