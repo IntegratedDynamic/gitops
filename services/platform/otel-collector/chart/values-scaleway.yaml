@@ -1,0 +1,97 @@
+# Values below nest under `otel-collector:` (the dependency alias, see
+# Chart.yaml) because this chart is a thin wrapper declaring the real
+# OpenTelemetry Collector chart as a dependency — Helm only exposes a
+# subchart's values under its dependency name/alias.
+otel-collector:
+  mode: deployment
+
+  # image.repository has NO chart-side default (the values.yaml ships it as
+  # "" with no template fallback) — the `prometheus` exporter below is
+  # contrib-only, so this must be the contrib distribution regardless.
+  image:
+    repository: otel/opentelemetry-collector-contrib
+
+  ports:
+    # otlp / otlp-http stay enabled (chart defaults) — the actual ingestion
+    # point this chart exists for.
+    #
+    # jaeger-*/zipkin: disabled. Nothing in this cluster speaks those
+    # protocols yet, and unlike Alloy's DaemonSet this is a single
+    # Deployment pod, so leaving the receivers themselves configured
+    # (below, in config.receivers) is a harmless idle listener either way
+    # — this only trims the unused Service/container ports.
+    jaeger-compact:
+      enabled: false
+    jaeger-thrift:
+      enabled: false
+    jaeger-grpc:
+      enabled: false
+    zipkin:
+      enabled: false
+    # The collector's own self-telemetry (the default config's
+    # service.telemetry.metrics block already exports here) — needed for
+    # serviceMonitor.enabled below to have something to scrape.
+    metrics:
+      enabled: true
+    # NOT a chart-default port: the `prometheus` exporter config.exporters
+    # entry below exposes forwarded application metrics on this port,
+    # separate from the collector's own self-telemetry on 8888 above.
+    app-metrics:
+      enabled: true
+      containerPort: 8889
+      servicePort: 8889
+      protocol: TCP
+
+  # config deep-merges with the chart's own default config (a map, not a
+  # list, at every level involved here) — only the keys named below are
+  # added/replaced; the default otlp/jaeger/zipkin receivers and
+  # memory_limiter/batch processors stay as-is (still referenced by
+  # config.receivers/config.processors, just not wired into these
+  # pipelines' `receivers:`/`processors:` lists below since those ARE lists
+  # and get replaced wholesale — this is deliberate, not a leftover).
+  config:
+    exporters:
+      # Loki's own native OTLP logs endpoint (Loki 3.x+) — no
+      # contrib-only `loki` exporter needed, otlphttp is core.
+      otlphttp/loki:
+        endpoint: http://loki.monitoring.svc:3100/otlp
+        tls:
+          insecure: true
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc:4317
+        tls:
+          insecure: true
+      # Scrape-style, not push (prometheusremotewrite): matches how every
+      # other component in this cluster is scraped (a ServiceMonitor), not
+      # a special case for app-pushed metrics.
+      prometheus:
+        endpoint: ${env:MY_POD_IP}:8889
+    service:
+      pipelines:
+        logs:
+          exporters: [otlphttp/loki]
+        metrics:
+          exporters: [prometheus]
+        traces:
+          exporters: [otlp/tempo]
+
+  # Sized conservative-default, not from observed usage (no traffic yet) —
+  # revisit once real usage exists, same tradeoff
+  # services/platform/velero/chart/values-scaleway.yaml's own resources
+  # comment already accepts. limits.memory matters beyond sizing here: the
+  # default config's memory_limiter processor derives its thresholds
+  # (limit_percentage/spike_limit_percentage) from this value.
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  serviceMonitor:
+    enabled: true
+
+  # No topologySpreadConstraints: single replica, same tradeoff
+  # services/platform/monitoring/loki-chart/values-scaleway.yaml's own
+  # comment on this already explains.

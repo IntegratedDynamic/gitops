@@ -1,0 +1,122 @@
+# Values below nest under `loki:` because this chart is a thin wrapper
+# declaring the real Loki chart as a dependency (see Chart.yaml) — Helm only
+# exposes a subchart the values under its dependency name.
+loki:
+  # SingleBinary, not the SimpleScalable/Distributed modes: this cluster's
+  # `DEV1-M` pool is already tight on headroom (see infra repo's argocd.tf
+  # resource-sizing comment) and has no log volume anywhere near the "few
+  # tens of GB/day" ceiling SingleBinary is scoped for — one pod doing
+  # everything (ingest, query, compaction) is the right amount of moving
+  # parts here.
+  deploymentMode: SingleBinary
+
+  loki:
+    auth_enabled: false
+
+    storage:
+      type: s3
+      bucketNames:
+        chunks: monitoring-loki-dev-id
+        ruler: monitoring-loki-dev-id
+      s3:
+        endpoint: s3.fr-par.scw.cloud
+        region: fr-par
+        # accessKeyId/secretAccessKey deliberately left unset (chart
+        # default): Loki's S3 client falls back to the standard AWS
+        # credential chain (env vars) when these config keys are empty —
+        # loki-secret's ExternalSecret lands AWS_ACCESS_KEY_ID/
+        # AWS_SECRET_ACCESS_KEY via singleBinary.extraEnvFrom below, same
+        # "credentials via env, not inline config" shape OpenBao's own
+        # unseal creds already use
+        # (services/platform/openbao/chart/values-scaleway.yaml).
+
+    # Required — the chart's own validate.yaml hook refuses to render
+    # without one (confirmed live via `helm template`, not a guess): every
+    # Loki install needs an explicit schema, since it's genuinely specific
+    # to when/how each cluster started. TSDB + v13 is the current
+    # documented recommendation for a fresh install
+    # (https://grafana.com/docs/loki/latest/operations/storage/schema/).
+    schemaConfig:
+      configs:
+        - from: "2026-08-15"
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+
+    # Compaction + retention both need enabling explicitly — off by
+    # default. 720h (30d) matches the loki bucket's own lifecycle (infra
+    # repo's 03-storage/scaleway/env/*.tfvars loki entry) — no point
+    # keeping Loki's own index/chunk retention longer than the bucket that
+    # backs it.
+    compactor:
+      retention_enabled: true
+    limits_config:
+      retention_period: 720h
+
+  # nginx reverse-proxy in front of Loki, on by default — disabled here:
+  # one less pod on a pool that's already tight, and SingleBinary mode's
+  # own pod already serves reads/writes directly. Grafana's Loki datasource
+  # (infra repo's 06-monitoring/grafana/managed) and Alloy/the OTel
+  # Collector all talk to the `loki` Service directly instead.
+  gateway:
+    enabled: false
+
+  # The chart's own validate.yaml hook fails otherwise: deploymentMode
+  # only controls which templates render, not the *values* — read/write/
+  # backend (SimpleScalable's own targets) still default to nonzero
+  # replicas regardless, since SimpleScalable is the chart's own default
+  # deploymentMode. Confirmed live via `helm template` first (this repo's
+  # standard practice, not a guess).
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  backend:
+    replicas: 0
+
+  singleBinary:
+    replicas: 1
+    extraEnvFrom:
+      - secretRef:
+          name: loki-s3-credentials
+
+    # Sized conservative-default, not from observed usage (no traffic yet)
+    # — revisit once real usage exists, same tradeoff
+    # services/platform/velero/chart/values-scaleway.yaml's own resources
+    # comment already accepts.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # No topologySpreadConstraints: unlike most components in this repo, the
+  # `singleBinary` target doesn't expose that field at all (confirmed
+  # against the chart's own values.yaml) — same tradeoff
+  # services/platform/monitoring/chart/values-scaleway.yaml's
+  # prometheusOperator comment already accepts for a single pod: a
+  # hand-rolled affinity workaround is more magic-number maintenance than
+  # it's worth for one pod.
+
+  # lokiCanary defaults to enabled (a DaemonSet, so one more pod per node)
+  # and test.enabled defaults to true (Helm test-hook Jobs) — neither
+  # earns its keep on a single-binary homelab instance with no other
+  # consumers relying on them yet.
+  lokiCanary:
+    enabled: false
+  test:
+    enabled: false
+
+  # chunksCache/resultsCache both default to enabled — two more memcached
+  # pods (confirmed live via `helm template`) purely for query/ingest
+  # speed at a scale this instance isn't at. Same "don't build for
+  # hypothetical scale" call as everything else trimmed in this file.
+  chunksCache:
+    enabled: false
+  resultsCache:
+    enabled: false

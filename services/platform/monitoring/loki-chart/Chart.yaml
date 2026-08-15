@@ -1,0 +1,17 @@
+apiVersion: v2
+name: loki
+description: Wrapper chart pulling in vendor Loki (SingleBinary mode, S3-backed), so this
+  deployment goes as a plain Application managed directly by
+  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list).
+  Consumes loki-s3-credentials, materialized by services/platform/monitoring/loki-secret
+  (a sibling app in that same graph) from OpenBao. Chart repo is the
+  grafana-community fork, not grafana.github.io/helm-charts — the OSS Loki chart
+  migrated there 2026-03-16 (grafana.github.io's copy is now GEL-only), same move
+  services/platform/monitoring/grafana-chart already made for Grafana itself.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: loki
+    version: 18.9.0
+    repository: https://grafana-community.github.io/helm-charts

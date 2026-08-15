@@ -1,0 +1,15 @@
+apiVersion: v2
+name: alloy
+description: Wrapper chart pulling in vendor Grafana Alloy (DaemonSet mode — the chart
+  default), so this deployment goes as a plain Application managed directly by
+  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list).
+  Ships every node's container logs to Loki (services/platform/monitoring/loki-chart)
+  via loki.source.kubernetes — the Kubernetes-API-based log tail, not a hostPath mount,
+  so no privileged securityContext or /var/log access is needed.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: alloy
+    version: 1.11.1
+    repository: https://grafana.github.io/helm-charts

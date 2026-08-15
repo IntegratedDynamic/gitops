@@ -122,6 +122,11 @@ scalewayApps:
   # wave 3, see below) via prometheus.prometheusSpec.thanos.
   # objectStorageConfig.existingSecret.
   - {name: thanos-secret, namespace: monitoring, chartPath: services/platform/monitoring/thanos-secret, valueFile: values.yaml, wave: "1"}
+  # loki-secret / tempo-secret: same ExternalSecret-only shape as
+  # thanos-secret above, one wave ahead of the charts that consume them
+  # (loki/tempo, wave 3 below) — see gitops#29.
+  - {name: loki-secret, namespace: monitoring, chartPath: services/platform/monitoring/loki-secret, valueFile: values.yaml, wave: "1"}
+  - {name: tempo-secret, namespace: monitoring, chartPath: services/platform/monitoring/tempo-secret, valueFile: values.yaml, wave: "1"}
 
   # wave 2 (2026-08-13, previously an intentionally-unused gap — see wave
   # 1's comment history) — kube-prometheus-stack-crds, the official
@@ -172,6 +177,11 @@ scalewayApps:
   # consumer.
   - {name: grafana-config, namespace: monitoring, chartPath: services/platform/monitoring/grafana-config, valueFile: values-scaleway.yaml, wave: "3"}
   - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "3", skipCrds: true, syncWaveLabelPaths: ['kube-prometheus-stack.prometheus.prometheusSpec.podMetadata.labels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheusOperator.podLabels.scalepack\.fr/sync-wave']}
+  # loki / tempo: same "real prerequisite is wave 1's secret, not anything
+  # cert-manager/gateway/dex-related" reasoning as kube-prometheus-stack
+  # above — see gitops#29.
+  - {name: loki, namespace: monitoring, chartPath: services/platform/monitoring/loki-chart, valueFile: values-scaleway.yaml, wave: "3"}
+  - {name: tempo, namespace: monitoring, chartPath: services/platform/monitoring/tempo-chart, valueFile: values-scaleway.yaml, wave: "3"}
 
   # wave 4 — velero + envoy-gateway + cert-manager (+ its Scaleway DNS01
   # ACME webhook). These three don't depend on each other at all — velero
@@ -212,6 +222,12 @@ scalewayApps:
   - {name: envoy-gateway, namespace: envoy-gateway-system, chartPath: services/platform/gateway/chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['gateway-helm.deployment.pod.labels.scalepack\.fr/sync-wave']}
   - {name: cert-manager, namespace: cert-manager, chartPath: services/platform/cert-manager/chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['cert-manager.podLabels.scalepack\.fr/sync-wave', 'cert-manager.webhook.podLabels.scalepack\.fr/sync-wave', 'cert-manager.cainjector.podLabels.scalepack\.fr/sync-wave']}
   - {name: cert-manager-webhook-scaleway, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['scaleway-certmanager-webhook.podLabels.scalepack\.fr/sync-wave']}
+  # alloy / otel-collector: one wave after loki/tempo (wave 3) — both need
+  # the `loki`/`tempo` Services resolvable, not just created. Unrelated to
+  # velero/envoy-gateway/cert-manager above; sharing this wave is free the
+  # same way those three already coexist here. See gitops#29.
+  - {name: alloy, namespace: monitoring, chartPath: services/platform/monitoring/alloy-chart, valueFile: values-scaleway.yaml, wave: "4"}
+  - {name: otel-collector, namespace: monitoring, chartPath: services/platform/otel-collector/chart, valueFile: values-scaleway.yaml, wave: "4"}
 
   # wave 5 — gateway-config needs BOTH wave 4's envoy-gateway (Gateway API
   # CRDs, for its own Gateway/GatewayClass/HTTPRoute) AND wave 4's
