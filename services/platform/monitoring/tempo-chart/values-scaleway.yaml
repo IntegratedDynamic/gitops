@@ -9,6 +9,14 @@
 # no-op'd a single-nested `tempo.storage...` override — not a guess.
 tempo:
   tempo:
+    # Explicit rather than relying on the chart's own default (which
+    # happens to also be 24h) — near-term durability only, same call as
+    # Thanos's own bucket and services/platform/monitoring/loki-chart's
+    # retention_period, not long-term queryable history. Written out so a
+    # future chart bump changing that default can't silently change this
+    # cluster's actual retention policy.
+    retention: 24h
+
     storage:
       trace:
         backend: s3
