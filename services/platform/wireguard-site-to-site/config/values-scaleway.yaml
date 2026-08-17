@@ -1,6 +1,6 @@
 # The peer list used to be hardcoded here, replaced by
-# services/platform/wireguard/secret's wireguard-peers Secret (synced from
-# OpenBao, itself sourced from the infra repo's 04-vpn/wireguard state).
+# services/platform/wireguard-site-to-site/secret's wireguard-peers Secret (synced from
+# OpenBao, itself sourced from the infra repo's 04-vpn/wireguard-site-to-site state).
 #
 # syncWave: fallback default, not the source of truth —
 # bootstrap/templates/scaleway.yaml injects this app's real `wave` here

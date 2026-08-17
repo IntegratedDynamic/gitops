@@ -1,0 +1,28 @@
+# Explicit least-privilege ingress, same reasoning as
+# services/platform/wireguard-site-to-site's own NetworkPolicy: exactly
+# UDP/{{ .Values.server.port }}, from anywhere (peers roam, can't be
+# source-IP-scoped), nothing else.
+#
+# UNVERIFIED on this cluster: whether Cilium enforces a NetworkPolicy
+# against a `hostNetwork: true` pod the same way it does an ordinary pod —
+# the site-to-site chart's pod isn't on hostNetwork, so this is new
+# territory. Not the load-bearing control regardless: the instance-level
+# scaleway_instance_security_group (infra repo's 10-cluster/scaleway/
+# main.tf) enforces the same UDP/{{ .Values.server.port }}-only allowlist
+# below Kubernetes entirely, same as it already does for the site-to-site
+# tunnel's NodePort.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wireguard-exit
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wireguard-exit
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: UDP
+          port: {{ .Values.server.port }}

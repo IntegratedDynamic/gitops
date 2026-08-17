@@ -1,0 +1,5 @@
+apiVersion: v2
+name: wireguard-exit-config
+description: Consumer-style WireGuard exit node — peers route all their traffic through the cluster's public IP via kernel IP forwarding + NAT
+type: application
+version: 0.1.0

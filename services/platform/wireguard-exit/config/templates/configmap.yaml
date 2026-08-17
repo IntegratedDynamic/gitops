@@ -1,0 +1,34 @@
+# Non-secret half of wg0.conf ([Interface] only). The private key comes
+# from the Secret services/platform/wireguard-exit/secret materializes;
+# [Peer] blocks come from that same secret chart's wireguard-exit-peers
+# Secret — both combined by an initContainer at pod start (see
+# deployment.yaml), never by Helm/ArgoCD, since ArgoCD's rendering has no
+# access to a Secret's live content.
+#
+# PostUp/PostDown are executed automatically by `wg-quick` (the linuxserver
+# image's entrypoint runs it against this exact file) — this is what makes
+# this chart an exit node instead of a point-to-point tunnel:
+#   - `sysctl -w net.ipv4.ip_forward=1` never goes through Kubernetes'
+#     sysctls admission path at all (that path is a confirmed dead end on
+#     this cluster — see infra repo's 04-vpn/wireguard-exit/README.md). It's
+#     a plain syscall from a process that already has CAP_SYS_ADMIN
+#     (granted by deployment.yaml's `privileged: true`), writing straight to
+#     /proc/sys/net/ipv4/ip_forward in the host's own network namespace
+#     (shared via `hostNetwork: true`).
+#   - the `iptables` MASQUERADE rule NATs a peer's tunnel-sourced traffic
+#     onto {{ .Values.egressInterface }} — the node's real internet-facing
+#     NIC — so it leaves the cluster looking like it came from the node's
+#     own public IP.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wireguard-exit-conf-template
+  namespace: {{ .Values.namespace }}
+data:
+  wg0.conf.tmpl: |
+    [Interface]
+    Address = {{ .Values.server.address }}
+    ListenPort = {{ .Values.server.port }}
+    PrivateKey = __PRIVATE_KEY__
+    PostUp = sysctl -w net.ipv4.ip_forward=1; iptables -t nat -A POSTROUTING -o {{ .Values.egressInterface }} -j MASQUERADE
+    PostDown = iptables -t nat -D POSTROUTING -o {{ .Values.egressInterface }} -j MASQUERADE

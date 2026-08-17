@@ -1,0 +1,4 @@
+# No overrides needed — base values.yaml already targets this environment's
+# only current use (the Scaleway cluster). Kept as an empty file so this
+# chart follows the same applications/scaleway -> values-scaleway.yaml
+# convention as every other chart, in case a divergence shows up later.

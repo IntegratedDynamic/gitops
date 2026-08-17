@@ -1,0 +1,30 @@
+# NodePort, not routed through the shared Gateway — same reasoning as
+# services/platform/wireguard-site-to-site: Scaleway's cloud-controller-
+# manager silently drops any non-TCP Service port when building the LB.
+#
+# Kept as a real Service (not just relying on hostNetwork's direct host
+# bind) purely for external-dns's `service` source, exactly like the
+# site-to-site chart — it needs a NodePort Service to discover which node
+# currently hosts the single replica and keep wg-exit.scalepack.fr pointed
+# there. UNVERIFIED so far on this cluster: the NodePort-DNAT-to-a-
+# hostNetwork-pod interaction (site-to-site's pod is NOT on hostNetwork) —
+# first thing to check once this is deployed (see infra repo's
+# 04-vpn/wireguard-exit/README.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.server.serviceName }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.server.hostname }}
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: wireguard-exit
+  ports:
+    - name: wireguard
+      port: {{ .Values.server.port }}
+      targetPort: {{ .Values.server.port }}
+      nodePort: {{ .Values.server.nodePort }}
+      protocol: UDP
