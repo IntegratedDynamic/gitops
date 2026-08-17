@@ -37,7 +37,7 @@ spec:
       serviceAccountName: wireguard
       initContainers:
         # Combines the non-secret template (configmap.yaml) with the private
-        # key from services/platform/wireguard/secret's Secret into the actual
+        # key from services/platform/wireguard-site-to-site/secret's Secret into the actual
         # wg0.conf the server container reads — this has to happen at pod
         # start, not at Helm render time, since ArgoCD never sees the
         # Secret's live content.
@@ -88,7 +88,7 @@ spec:
               value: "1000"
             # Custom wg_confs/wg0.conf is supplied directly (mounted below)
             # — this disables the image's own key/peer auto-generation,
-            # since Terraform (infra repo's 04-vpn/wireguard) already
+            # since Terraform (infra repo's 04-vpn/wireguard-site-to-site) already
             # owns that.
           ports:
             - name: wireguard
@@ -148,7 +148,7 @@ spec:
         # address (server.address, stripped of its CIDR suffix) and
         # forwards everything else upstream. Peers get this pushed via
         # their wg-quick config's DNS setting (infra repo's
-        # 04-vpn/wireguard/main.tf) — while the tunnel is up, every
+        # 04-vpn/wireguard-site-to-site/main.tf) — while the tunnel is up, every
         # *.scalepack.fr hostname resolves to the tunnel automatically, no
         # /etc/hosts editing, and it reverts the moment the tunnel goes
         # down (scoped to the interface's own DNS config, not a standing

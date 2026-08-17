@@ -112,7 +112,11 @@ scalewayApps:
   - {name: secrets-sync, namespace: secrets-sync, chartPath: services/platform/secrets-sync/config, valueFile: values-scaleway.yaml, wave: "1"}
   - {name: velero-secret, namespace: velero, chartPath: services/platform/velero/secret, valueFile: values.yaml, wave: "1"}
   - {name: cert-manager-webhook-secret, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-secret, valueFile: values.yaml, wave: "1"}
-  - {name: wireguard-secret, namespace: wireguard, chartPath: services/platform/wireguard/secret, valueFile: values-scaleway.yaml, wave: "1"}
+  - {name: wireguard-secret, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/secret, valueFile: values-scaleway.yaml, wave: "1"}
+  # wireguard-exit-secret: same ExternalSecret-only shape, for the separate
+  # exit-node deployment (services/platform/wireguard-exit) — see that
+  # chart's README for why it's a second, unrelated WireGuard deployment.
+  - {name: wireguard-exit-secret, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/secret, valueFile: values-scaleway.yaml, wave: "1"}
   - {name: dex-secret, namespace: gateway, chartPath: services/platform/dex/secret, valueFile: values.yaml, wave: "1"}
   - {name: external-dns-secret, namespace: external-dns, chartPath: services/platform/external-dns/secret, valueFile: values.yaml, wave: "1"}
   - {name: grafana-secret, namespace: monitoring, chartPath: services/platform/monitoring/grafana-secret, valueFile: values.yaml, wave: "1"}
@@ -289,7 +293,12 @@ scalewayApps:
   # already soft/eventually-consistent, no wave-timing issue observed) —
   # it's purely naming precision, so these charts keep whatever wave their
   # parent already had.
-  - {name: wireguard-config, namespace: wireguard, chartPath: services/platform/wireguard/config, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['syncWave']}
+  - {name: wireguard-config, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/config, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['syncWave']}
+  # wireguard-exit-config doesn't actually need to wait on gateway-config
+  # (no proxy-gateway sidecar, no dependency on the shared Gateway at all)
+  # — rides along in the same wave as its sibling anyway for simplicity;
+  # nothing forces it any earlier.
+  - {name: wireguard-exit-config, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/config, valueFile: values-scaleway.yaml, wave: "6"}
   - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
   - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
   - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['external-dns.podLabels.scalepack\.fr/sync-wave']}

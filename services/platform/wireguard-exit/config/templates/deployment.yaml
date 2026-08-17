@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wireguard-exit
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  strategy:
+    # Same reasoning as services/platform/wireguard-site-to-site/config: a
+    # second replica during a rollout would mean two pods both bound to the
+    # same hostNetwork port on whichever node(s) they land on — Recreate
+    # avoids that outright, a short tunnel blip during a rollout is fine.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wireguard-exit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wireguard-exit
+    spec:
+      # Shares the host's network namespace — required for the wireguard
+      # container's PostUp (configmap.yaml) to run `iptables`/`sysctl -w`
+      # against the node's REAL netfilter tables/interfaces, not an
+      # isolated pod netns. Combined with `privileged: true` below, this is
+      # the live-validated way to get kernel IP forwarding + NAT on this
+      # cluster without going through Kubernetes' sysctls admission path
+      # (confirmed a dead end — see infra repo's
+      # 04-vpn/wireguard-exit/README.md). Cilium itself already runs this
+      # same combination cluster-wide, so this isn't a new risk class here.
+      hostNetwork: true
+      # Required with hostNetwork: true so in-cluster DNS (for the
+      # initContainer's Secret/ConfigMap mounts — those don't need DNS, but
+      # this is the standard pairing for any hostNetwork pod on this
+      # cluster) still resolves via the cluster's own resolver rather than
+      # whatever the node's /etc/resolv.conf happens to point at.
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        # Combines the non-secret template (configmap.yaml) with the private
+        # key from services/platform/wireguard-exit/secret's Secret into the
+        # actual wg0.conf the server container reads — same pattern as
+        # services/platform/wireguard-site-to-site/config's own
+        # render-wg-conf, including the per-peer [Peer] block loop (that
+        # loop is unchanged here: each peer's AllowedIPs in the SERVER's
+        # config is still their own /32 — routing everything is a property
+        # of the PEER's own client config, minted in the infra repo's
+        # 04-vpn/wireguard-exit/main.tf, not this template).
+        - name: render-wg-conf
+          image: alpine:3.22
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              apk add --no-cache jq
+              PRIVATE_KEY=$(cat /secrets/{{ .Values.server.privateKeySecretKey }})
+              sed "s|__PRIVATE_KEY__|$PRIVATE_KEY|" /template/wg0.conf.tmpl > /config/wg_confs/wg0.conf
+              for f in /peers/*; do
+                name=$(basename "$f")
+                pubkey=$(jq -r '.publicKey' "$f")
+                allowedips=$(jq -r '.allowedIPs' "$f")
+                printf "\n# %s\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\n" "$name" "$pubkey" "$allowedips" >> /config/wg_confs/wg0.conf
+              done
+              chmod 600 /config/wg_confs/wg0.conf
+          resources: {{ .Values.resources.renderConf | toYaml | nindent 12 }}
+          volumeMounts:
+            - name: conf-template
+              mountPath: /template
+              readOnly: true
+            - name: server-key
+              mountPath: /secrets
+              readOnly: true
+            - name: peers
+              mountPath: /peers
+              readOnly: true
+            - name: wg-confs
+              mountPath: /config/wg_confs
+      containers:
+        - name: wireguard
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          securityContext:
+            # NOT just NET_ADMIN (services/platform/wireguard-site-to-site's
+            # container only needs that, since it never touches iptables or
+            # sysctls) — this container's PostUp/PostDown genuinely need
+            # CAP_SYS_ADMIN (sysctl -w against the host netns) on top of
+            # NET_ADMIN/NET_RAW (iptables), so `privileged: true` is the
+            # live-validated combination rather than an enumerated
+            # capability list. See configmap.yaml + this pod's hostNetwork
+            # above.
+            privileged: true
+          resources: {{ .Values.resources.wireguard | toYaml | nindent 12 }}
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            # Custom wg_confs/wg0.conf is supplied directly (mounted below)
+            # — disables the image's own key/peer/PostUp auto-generation,
+            # since Terraform (infra repo's 04-vpn/wireguard-exit) and
+            # configmap.yaml already own that.
+          ports:
+            - name: wireguard
+              containerPort: {{ .Values.server.port }}
+              protocol: UDP
+          volumeMounts:
+            - name: wg-confs
+              mountPath: /config/wg_confs
+      volumes:
+        - name: conf-template
+          configMap:
+            name: wireguard-exit-conf-template
+        - name: server-key
+          secret:
+            secretName: {{ .Values.server.privateKeySecretName }}
+        - name: peers
+          secret:
+            secretName: {{ .Values.server.peersSecretName }}
+        - name: wg-confs
+          emptyDir: {}

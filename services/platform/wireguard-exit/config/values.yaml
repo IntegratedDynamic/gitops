@@ -1,0 +1,90 @@
+# A second, unrelated WireGuard deployment alongside
+# services/platform/wireguard-site-to-site — a consumer-style "exit node"
+# (NordVPN-style): a peer connects and ALL of its traffic, not just one
+# service, egresses through this cluster's public IP. See infra repo's
+# 04-vpn/wireguard-exit/README.md for the full design and where every key
+# in this chart's values actually comes from.
+#
+# Unlike the site-to-site chart, this pod does real kernel-level routing
+# (net.ipv4.ip_forward + iptables MASQUERADE, run via WireGuard's own
+# PostUp/PostDown — see templates/configmap.yaml) rather than app-layer
+# proxying — an exit node has no single known destination to proxy to, so
+# app-layer proxying doesn't apply here the way it does for the OpenBao
+# tunnel. That needs hostNetwork: true + securityContext.privileged: true
+# (templates/deployment.yaml) — confirmed live as viable on this cluster
+# (no restrictive PodSecurity admission, no Kyverno/Gatekeeper, and Cilium
+# itself already runs the same combination) after the app-layer-only
+# alternative (Kubernetes securityContext.sysctls for net.ipv4.ip_forward)
+# was confirmed a dead end: Kapsule's kubelet doesn't allowlist that sysctl
+# and Scaleway's kubelet_args API refuses to widen the allowlist for this
+# cluster's k8s version at all.
+#
+# Exposed as a NodePort directly on a Kapsule node's public IP, same
+# reasoning as the site-to-site chart (Scaleway's LB Service integration
+# silently drops non-TCP ports) — see templates/service.yaml and
+# templates/networkpolicy.yaml.
+namespace: wireguard-exit
+
+# The domain the dns sidecar answers for on the site-to-site chart doesn't
+# apply here — no split-DNS, no in-cluster hostname resolution to special-
+# case. Peers get a plain public resolver pushed via their wg-quick config's
+# DNS setting instead (infra repo's 04-vpn/wireguard-exit/main.tf).
+
+server:
+  port: 51820
+  # Fixed rather than letting Kubernetes assign one from the NodePort range
+  # at random — same reasoning as the site-to-site chart. One port after
+  # that chart's 30820.
+  nodePort: 30821
+  # external-dns keeps this pointed at whichever node currently hosts the
+  # pod (see templates/service.yaml's annotation) — peers dial this, never
+  # a raw IP.
+  hostname: wg-exit.scalepack.fr
+  # WireGuard's own point-to-point overlay subnet — separate /24 from the
+  # site-to-site tunnel's 10.100.0.0/24 (two independent interfaces, no
+  # shared L3 domain, but a distinct range keeps the two deployments
+  # visually unambiguous). Server sits at .1; each peer gets its own /32.
+  address: 10.200.0.1/24
+  image:
+    repository: lscr.io/linuxserver/wireguard
+    tag: "1.0.20260223"
+  # Secrets materialized by services/platform/wireguard-exit/secret
+  # (ExternalSecrets from OpenBao's kv/apps/wireguard-exit/server-key and
+  # kv/apps/wireguard-exit/peers respectively) — nothing about the tunnel's
+  # keys or peer list is hardcoded in this repo, all of it flows from the
+  # infra repo's 04-vpn/wireguard-exit through OpenBao (see that secret
+  # chart's values.yaml).
+  privateKeySecretName: wireguard-exit-server-key
+  privateKeySecretKey: private-key
+  peersSecretName: wireguard-exit-peers
+  serviceName: wireguard-exit
+
+# The real NIC on a Kapsule node that has the default route to the internet
+# — confirmed live via `kubectl exec` into an existing Cilium pod
+# (`ip route get 1.1.1.1` -> `dev ens2`). NOT `eth0`. Kapsule node-image
+# specific; re-verify if Scaleway ever changes the node image's interface
+# naming (see infra repo's 04-vpn/wireguard-exit/README.md's hand-off
+# table).
+egressInterface: ens2
+
+# This chart follows the same "explicit per-container resources, no chart
+# default" policy as every other platform chart (see
+# services/platform/monitoring/alloy-chart/values-scaleway.yaml's comment
+# for the incident that established this) — but stays much smaller than the
+# site-to-site chart's four-sidecar pod: this pod is just the render-conf
+# initContainer + the single wireguard container.
+resources:
+  renderConf:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+  wireguard:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi

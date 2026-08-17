@@ -4,7 +4,7 @@
 # unrelated reason: OpenBao's own native OIDC/UI login for humans
 # (services/platform/openbao/gateway), which this domain doesn't touch. No
 # third-party control plane (Tailscale evaluated, ruled out) — see infra
-# repo's 04-vpn/wireguard/README.md for the full design and where every
+# repo's 04-vpn/wireguard-site-to-site/README.md for the full design and where every
 # key in this chart's values actually comes from.
 #
 # This pod terminates the tunnel and proxies to each target in
@@ -81,11 +81,11 @@ server:
   image:
     repository: lscr.io/linuxserver/wireguard
     tag: "1.0.20260223"
-  # Secrets materialized by services/platform/wireguard/secret (ExternalSecrets
+  # Secrets materialized by services/platform/wireguard-site-to-site/secret (ExternalSecrets
   # from OpenBao's kv/apps/wireguard/server-key and kv/apps/wireguard/peers
   # respectively) — nothing about the tunnel's keys or peer list is
   # hardcoded in this repo, all of it flows from the infra repo's
-  # 04-vpn/wireguard through OpenBao (see that init chart's values.yaml).
+  # 04-vpn/wireguard-site-to-site through OpenBao (see that init chart's values.yaml).
   privateKeySecretName: wireguard-server-key
   privateKeySecretKey: private-key
   peersSecretName: wireguard-peers
