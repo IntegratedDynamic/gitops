@@ -174,15 +174,6 @@ scalewayApps:
   # grafana-gateway's HTTPRoute (which stays at wave 7, see that wave's
   # comment).
   - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "2"}
-  # terraform-apply (2026-08-19): one WorkflowTemplate + one CronWorkflow
-  # per Terraform root that needs to run from inside the cluster (today
-  # 05-secrets/openbao/managed and 06-monitoring/grafana/{bootstrap,managed}
-  # — see services/platform/argo-workflows/terraform-apply/Chart.yaml) —
-  # needs wave 1's argo-workflows chart to have actually Established its
-  # CRDs first (see that entry's comment). Unrelated to kube-prometheus-
-  # stack-crds sharing this wave — same "no interdependency, wave reuse is
-  # free" logic as every other multi-app wave in this file.
-  - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "2"}
 
   # wave 3 (2026-08-13, previously an intentionally-unused gap — see wave
   # 1's comment history) — kube-prometheus-stack + grafana-config, moved
@@ -257,6 +248,11 @@ scalewayApps:
   # same way those three already coexist here. See gitops#29.
   - {name: alloy, namespace: monitoring, chartPath: services/platform/monitoring/alloy-chart, valueFile: values-scaleway.yaml, wave: "4"}
   - {name: otel-collector, namespace: monitoring, chartPath: services/platform/otel-collector/chart, valueFile: values-scaleway.yaml, wave: "4"}
+  # argocd-config-monitoring (2026-08-20): PrometheusRule, needs wave 3's
+  # kube-prometheus-stack-crds Established first (the monitoring.coreos.dev
+  # CRDs) -- shares this wave for the same "no interdependency, wave reuse
+  # is free" reasoning as everything else here.
+  - {name: argocd-config-monitoring, namespace: argocd, chartPath: services/platform/argocd-config/monitoring, valueFile: values.yaml, wave: "4"}
 
   # wave 5 — gateway-config needs BOTH wave 4's envoy-gateway (Gateway API
   # CRDs, for its own Gateway/GatewayClass/HTTPRoute) AND wave 4's
@@ -335,6 +331,20 @@ scalewayApps:
   - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
   - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
   - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['external-dns.podLabels.scalepack\.fr/sync-wave']}
+  # terraform-apply: TEMPORARILY moved here from wave 2 (2026-08-20) —
+  # confirmed live that running it as early as wave 2 fires the
+  # grafana-bootstrap/grafana-managed CronWorkflows before `grafana` (wave
+  # 5) has even synced, so every run fails until the cluster's next
+  # scheduled trigger happens to land after wave 5. Wave 2 only ever
+  # guaranteed argo-workflows' own CRDs were Established (this entry's
+  # original comment, now moved with it below), never that terraform-apply's
+  # *targets* existed — grafana wasn't a dependency this wave-gating scheme
+  # accounted for. Wave 6 is a blunt fix (grafana is wave 5, so this now
+  # always runs after it) — proper per-root dependency/health gating
+  # (openbao-managed's own dependency is OpenBao itself, wave 0, so it
+  # doesn't actually need to wait this long) is follow-up work, not done
+  # here.
+  - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "6"}
 
   # wave 7 — argocd-config/openbao-gateway ride along together: same
   # prerequisite (Gateway + Dex from wave 6), no named stage of their own.

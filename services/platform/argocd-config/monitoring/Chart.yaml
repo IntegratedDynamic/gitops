@@ -1,0 +1,11 @@
+apiVersion: v2
+name: argocd-config-monitoring
+description: >-
+  PrometheusRule-only chart -- alerts on real production pain from this
+  cluster's own boot history (see this chart's PrometheusRule for the
+  specifics), not speculative coverage. Split out from
+  services/platform/argocd-config/config (that chart's own scope is the
+  OIDC client secret + restart hook, a different concern) rather than
+  folded in, matching this repo's one-concern-per-chart convention.
+type: application
+version: 0.1.0

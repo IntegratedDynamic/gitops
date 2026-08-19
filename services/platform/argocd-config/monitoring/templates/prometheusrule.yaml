@@ -1,0 +1,56 @@
+# Two alerts, both written from this cluster's own 2026-08-19/20 boot
+# incident (a full ArgoCD tree resync repeatedly OOMKilled
+# argocd-application-controller, silently killing every sync attempt --
+# the only way anyone noticed was manual `kubectl get pods` polling during
+# a live debugging session). Cheap, targeted, not a speculative "cover
+# everything" ruleset.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-observability
+  namespace: {{ .Values.namespace }}
+  labels:
+    release: {{ .Values.ruleSelectorLabel }}
+spec:
+  groups:
+    - name: argocd-observability
+      rules:
+        # Cluster-wide, not ArgoCD-only: the same small-node memory
+        # pressure that hit argocd-application-controller also knocked
+        # over argocd-repo-server and cert-manager during that incident --
+        # any container OOMKilling anywhere is worth surfacing, not just
+        # ArgoCD's own.
+        - alert: ContainerOOMKilled
+          expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ `{{ $labels.namespace }}/{{ $labels.pod }}` }} container {{ `{{ $labels.container }}` }} was OOMKilled"
+            description: >-
+              {{ `{{ $labels.namespace }}/{{ $labels.pod }}` }}'s
+              {{ `{{ $labels.container }}` }} container's last termination
+              reason was OOMKilled. Check its resource limits and recent
+              memory usage.
+
+        # Early warning before the kill: catches the controller trending
+        # toward its limit during a heavy sync burst, instead of only
+        # finding out after GOMEMLIMIT's own proactive-GC headroom (see
+        # infra repo's 10-cluster/scaleway/argocd.tf) already ran out.
+        - alert: ArgoCDApplicationControllerMemoryHigh
+          expr: |
+            container_memory_working_set_bytes{namespace="argocd", container="application-controller"}
+              / on(namespace, pod, container)
+            kube_pod_container_resource_limits{namespace="argocd", container="application-controller", resource="memory"}
+              > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "argocd-application-controller sustained high memory"
+            description: >-
+              argocd-application-controller has stayed above 85% of its
+              memory limit for 5+ minutes -- likely a heavy sync burst
+              (many Applications reconciling at once). GOMEMLIMIT should
+              already be forcing proactive GC at this point; if this
+              keeps firing, the limit itself needs raising again.
