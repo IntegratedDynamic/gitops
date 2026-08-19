@@ -1,0 +1,57 @@
+# Values below nest under `argo-workflows:` because this chart is a thin
+# wrapper declaring the real Argo Workflows chart as a dependency (see
+# chart/Chart.yaml) — Helm only exposes a subchart the values under its
+# dependency name.
+argo-workflows:
+  # Only the workflow-controller is needed (runs the terraform-openbao-apply
+  # CronWorkflow) — see Chart.yaml's description for why the Argo Server
+  # (UI/API) stays disabled.
+  server:
+    enabled: false
+
+  # Scoped to this one namespace instead of watching Workflows across the
+  # whole cluster — the only Workflow that exists today
+  # (terraform-openbao-apply's CronWorkflow) lives here too, so cluster-wide
+  # RBAC would be unused blast radius.
+  singleNamespace: true
+
+  workflow:
+    serviceAccount:
+      # CronWorkflow pods run as this ServiceAccount by default
+      # (workflow.serviceAccount.name, unchanged). No extra RBAC rules
+      # needed beyond the chart's own default (workflow.rbac.create) — the
+      # terraform-openbao-apply CronWorkflow only talks to OpenBao's
+      # Service and the Scaleway S3 endpoint, never the Kubernetes API.
+      create: true
+
+  controller:
+    # Soft "spread pods from this same sync-wave across nodes" — every chart
+    # in this repo gets the same pattern (see e.g.
+    # services/platform/cert-manager/chart/values-scaleway.yaml's comment).
+    # extraLabels' value here is a fallback default, not the source of
+    # truth — bootstrap/templates/scaleway.yaml injects this app's real
+    # `wave` from bootstrap/values.yaml via source.helm.parameters. Set to
+    # "-1" (not a real wave — waves start at 0) rather than a
+    # plausible-looking number, so a standalone `helm template` run makes
+    # the un-injected fallback obviously wrong instead of silently matching
+    # production.
+    podLabels:
+      scalepack.fr/sync-wave: "-1"
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        matchLabelKeys:
+          - scalepack.fr/sync-wave
+        labelSelector: {}
+    # Lightweight controller, no steady-state load beyond watching for the
+    # hourly CronWorkflow trigger — sized like cert-manager's own controller
+    # (services/platform/cert-manager/chart/values-scaleway.yaml), not
+    # OpenBao/Prometheus-scale.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 96Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
