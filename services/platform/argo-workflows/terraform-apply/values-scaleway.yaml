@@ -1,0 +1,90 @@
+namespace: argo-workflows
+
+# argo-workflows/chart's workflow.serviceAccount (created, workflow.rbac
+# still applies via its RoleBinding) -- unchanged default name from that
+# chart's values, not re-declared there since this chart only needs to
+# reference it, not own it.
+serviceAccountName: argo-workflow
+
+# Both this repo and the infra repo are public -- plain anonymous HTTPS,
+# no git credential needed.
+gitRepo: https://github.com/IntegratedDynamic/infrastructure.git
+gitRef: main
+gitImage: alpine/git:2.54.0
+
+terraformImage: hashicorp/terraform:1.14
+# Matches infra repo's mise.toml pin (terraform = "1.14") -- keep these two
+# in step if that ever bumps.
+
+# Secret materialized by services/platform/argo-workflows/secret (wave 1) --
+# same identity/credential for every root below (argo-workflows-state in the
+# infra repo's 01-iam/workload/scaleway, project-scoped like every other
+# identity in that repo -- see that identity's own tfvars comment for why
+# a per-bucket scaleway_object_bucket_policy was tried and reverted).
+scalewayCredentialsSecretName: argo-workflows-scaleway-state-credentials
+
+resources:
+  gitClone:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+  terraformApply:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+# One CronWorkflow per entry, all sharing the terraform-apply
+# WorkflowTemplate (templates/workflowtemplate.yaml). extraSecretName is
+# optional (envFrom optional: true in the template) -- point it at a Secret
+# that doesn't exist for a root with no extra required variables, rather
+# than making every root plumb one.
+terraformRoots:
+  - name: openbao-managed
+    root: 05-secrets/openbao/managed
+    workspace: 05-secrets-openbao-secrets
+    # 10 minutes before the OpenBao snapshot agent's own hourly schedule
+    # (services/platform/openbao/chart/values-scaleway.yaml, snapshotAgent.
+    # schedule: "0 * * * *") -- deliberate, so that schedule's backup
+    # captures whatever this apply just changed.
+    schedule: "50 * * * *"
+    # vault provider's in-cluster address (05-secrets/openbao/managed/
+    # version.tf's var.vault_address) -- matches services/platform/openbao/
+    # init's baoAddr. The whole reason this root runs from in-cluster at
+    # all is that OpenBao isn't reachable any other way for a while after
+    # cluster boot.
+    vaultAddress: http://openbao.openbao.svc:8200
+    # grafana_url isn't a variable this root declares -- TF_VAR_grafana_url
+    # just gets ignored (Terraform's documented behavior for an
+    # unrecognized TF_VAR_*), leaving it empty is harmless.
+    grafanaUrl: ""
+    # The only root with required, no-default variables this CronWorkflow
+    # can't generate itself (dex_github_connector,
+    # secrets_sync_github_eso_private_key, secrets_sync_github) -- see that
+    # root's README "Credentials" section.
+    extraSecretName: argo-workflows-openbao-managed-tfvars
+
+  - name: grafana-bootstrap
+    root: 06-monitoring/grafana/bootstrap
+    workspace: 06-monitoring-grafana
+    schedule: "20 * * * *"
+    # vault-address is simply unused by this root's variables; harmless
+    # empty, same reasoning as grafanaUrl below for openbao-managed.
+    vaultAddress: ""
+    # Confirmed live: the public route (that root's version.tf default)
+    # times out reaching Grafana from inside the cluster -- a pod behind
+    # the cluster's own public ingress trying to reach it is a common
+    # hairpin-NAT gap. Matches services/platform/monitoring's Grafana
+    # Service (namespace monitoring, port 80).
+    grafanaUrl: http://grafana.monitoring.svc:80/
+    # No required, no-default variables at all -- both its own vars have
+    # defaults and everything else is a cross-root state read.
+    extraSecretName: argo-workflows-grafana-bootstrap-extra
+
+  - name: grafana-managed
+    root: 06-monitoring/grafana/managed
+    workspace: 06-monitoring-grafana
+    # 10 minutes after grafana-bootstrap: this root reads bootstrap's
+    # service_account_token via data.terraform_remote_state -- running
+    # after, not concurrently, avoids racing a token rotation.
+    schedule: "30 * * * *"
+    vaultAddress: ""
+    grafanaUrl: http://grafana.monitoring.svc:80/
+    extraSecretName: argo-workflows-grafana-managed-extra

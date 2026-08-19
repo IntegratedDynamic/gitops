@@ -1,0 +1,20 @@
+apiVersion: v2
+name: argo-workflows
+description: >-
+  Wrapper chart pulling in vendor Argo Workflows, so this deployment
+  goes as a plain Application managed directly by
+  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps
+  list) instead of the old, uncoordinated services-vendor-scaleway/services-
+  app-scaleway split. The Argo Server component (UI/API) is disabled in
+  values-scaleway.yaml -- only the workflow-controller (watches
+  Workflow/CronWorkflow CRDs and runs them) is needed for
+  services/platform/argo-workflows/terraform-openbao-apply's CronWorkflow;
+  the server would add a Dex/gateway wave dependency and an exposed route
+  for nothing this repo uses yet.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: argo-workflows
+    version: 2.0.1
+    repository: "https://argoproj.github.io/argo-helm"
