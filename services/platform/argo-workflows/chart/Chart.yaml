@@ -5,12 +5,13 @@ description: >-
   goes as a plain Application managed directly by
   bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps
   list) instead of the old, uncoordinated services-vendor-scaleway/services-
-  app-scaleway split. The Argo Server component (UI/API) is disabled in
-  values-scaleway.yaml -- only the workflow-controller (watches
-  Workflow/CronWorkflow CRDs and runs them) is needed for
-  services/platform/argo-workflows/terraform-openbao-apply's CronWorkflow;
-  the server would add a Dex/gateway wave dependency and an exposed route
-  for nothing this repo uses yet.
+  app-scaleway split. The Argo Server component (UI/API) is enabled in
+  values-scaleway.yaml (2026-08-20) -- native OIDC against the shared Dex,
+  exposed at argo-workflows.scalepack.fr by
+  services/platform/argo-workflows/gateway -- so
+  Workflows/CronWorkflows created by
+  services/platform/argo-workflows/terraform-apply can actually be
+  inspected and manipulated by hand, not just triggered on a schedule.
 type: application
 version: 0.1.0
 

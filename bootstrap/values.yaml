@@ -351,6 +351,10 @@ scalewayApps:
   - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: argocd-config-gateway, namespace: argocd, chartPath: services/platform/argocd-config/gateway, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: openbao-gateway, namespace: openbao, chartPath: services/platform/openbao/gateway, valueFile: values-scaleway.yaml, wave: "7"}
+  # argo-workflows-gateway (2026-08-20): same "real dependency is Gateway +
+  # Dex from wave 6" reasoning as every other *-gateway chart in this wave —
+  # exposes the Argo Server UI/API enabled in services/platform/argo-workflows/chart.
+  - {name: argo-workflows-gateway, namespace: argo-workflows, chartPath: services/platform/argo-workflows/gateway, valueFile: values.yaml, wave: "7"}
 
   # wave 8 — products.
   - {name: demo, namespace: demo, chartPath: services/products/demo/chart, valueFile: values-scaleway.yaml, wave: "8", syncWaveLabelPaths: ['syncWave']}

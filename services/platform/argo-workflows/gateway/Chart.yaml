@@ -1,0 +1,12 @@
+apiVersion: v2
+name: argo-workflows-gateway
+description: >-
+  HTTPRoute-only chart exposing the Argo Server UI/API at
+  argo-workflows.scalepack.fr on the shared gateway -- same split-out
+  pattern as services/platform/dex/gateway, services/platform/openbao/gateway,
+  and services/platform/monitoring/grafana-gateway. Argo Server talks OIDC
+  natively to Dex (server.sso, services/platform/argo-workflows/chart) rather
+  than going through Envoy Gateway's SecurityPolicy filter, same reasoning as
+  those other native-OIDC apps.
+type: application
+version: 0.1.0
