@@ -14,7 +14,14 @@ env: local
 # any other value. Overriding it on your own branch is a handy DevX trick to
 # deploy the whole tree from that branch; just don't merge that change in.
 # TODO(validation): enforce `revision: main` as a PR check before merge.
-revision: main
+#
+# TODO(before merge): revert to "main". Temporarily overridden for this PR's
+# live end-to-end test — child Applications (e.g. wireguard-exit-config)
+# were still tracking "main" and not picking up in-branch changes (like the
+# wireguard-exit disable) despite 10-cluster/scaleway/local.auto.tfvars'
+# gitops_revision already pointing the bootstrap Application itself at this
+# branch — that only affects bootstrap's own revision, not this value.
+revision: feature/argo-workflows-openbao-apply
 repoURL: https://github.com/IntegratedDynamic/gitops.git
 
 # Every scaleway Application, rendered directly as a managed resource of
