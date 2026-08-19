@@ -9,14 +9,7 @@ serviceAccountName: argo-workflow
 # Both this repo and the infra repo are public -- plain anonymous HTTPS,
 # no git credential needed.
 gitRepo: https://github.com/IntegratedDynamic/infrastructure.git
-# TODO(before merge): revert to "main". Pinned to the companion infra PR's
-# branch for now -- infra PR #66 (TF_VAR_* rename, argo-workflows-state IAM
-# identity) isn't merged yet, and this whole feature hasn't been proven to
-# work end to end, so it doesn't get merged until it has been. Same reason
-# 10-cluster/scaleway/local.auto.tfvars's gitops_revision is temporarily
-# pointed at feature/argo-workflows-openbao-apply too -- neither reverts
-# until the live test actually passes.
-gitRef: feature/argo-workflows-openbao-apply
+gitRef: main
 gitImage: alpine/git:2.54.0
 
 terraformImage: hashicorp/terraform:1.14
