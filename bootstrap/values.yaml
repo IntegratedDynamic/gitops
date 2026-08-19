@@ -298,7 +298,15 @@ scalewayApps:
   # (no proxy-gateway sidecar, no dependency on the shared Gateway at all)
   # — rides along in the same wave as its sibling anyway for simplicity;
   # nothing forces it any earlier.
-  - {name: wireguard-exit-config, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/config, valueFile: values-scaleway.yaml, wave: "6"}
+  #
+  # Disabled 2026-08-19: this pod's real kernel wg0 interface (unlike
+  # wireguard-site-to-site, which proxies at the app layer, no kernel
+  # interface) conflicts with Cilium's XDP acceleration on whatever node
+  # it lands on — confirmed live, 100% reproducible across a full cluster
+  # rebuild, Cilium CrashLoopBackOff every time on that node ("attaching
+  # XDP program to interface wg0: ... operation not supported"). Site-to-
+  # site is unaffected and stays enabled.
+  # - {name: wireguard-exit-config, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/config, valueFile: values-scaleway.yaml, wave: "6"}
   - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
   - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
   - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['external-dns.podLabels.scalepack\.fr/sync-wave']}
