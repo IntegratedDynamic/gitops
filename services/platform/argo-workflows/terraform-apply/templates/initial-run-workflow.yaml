@@ -61,6 +61,14 @@ spec:
   volumes:
     - name: workspace
       emptyDir: {}
+  # Same gap as volumes/serviceAccountName above, same fix -- copy it
+  # rather than rely on inheriting it from the referenced template.
+  # OnWorkflowSuccess (not the Argo default): keep a failed task's pod
+  # around for log inspection, only prune once the whole run actually
+  # succeeds. Confirmed live: without this, even a *successful* run's pod
+  # was already gone by the time anyone went looking for its logs.
+  podGC:
+    strategy: OnWorkflowSuccess
   templates:
     - name: main
       dag:
