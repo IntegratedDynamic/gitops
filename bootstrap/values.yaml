@@ -356,7 +356,15 @@ scalewayApps:
   # always runs after it) — proper per-root dependency/health gating
   # (openbao-managed's own dependency is OpenBao itself, wave 0, so it
   # doesn't actually need to wait this long) is follow-up work, not done
-  # here.
+  # here. Wave placement itself is still needed (grafana-managed genuinely
+  # can't succeed before grafana-bootstrap has minted a fresh token against
+  # the rebuilt Grafana), but as of infra#75's fix (2026-08-20) this chart's
+  # own PostSync hook (templates/initial-run-*.yaml) submits
+  # grafana-bootstrap then grafana-managed immediately once this wave
+  # syncs, rather than leaving them to wait out their next hourly
+  # CronWorkflow trigger — confirmed live that trigger gap left Grafana's
+  # Terraform-managed config (dashboards/datasources/SSO) unrecovered for
+  # up to ~50 minutes after a fresh rebuild.
   - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "6"}
 
   # wave 7 — argocd-config/openbao-gateway ride along together: same

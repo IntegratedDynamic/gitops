@@ -1,0 +1,82 @@
+{{- if .Values.initialRun.enabled }}
+{{- /*
+Look up the grafana-bootstrap/grafana-managed entries from .Values.terraformRoots
+by name, rather than re-hardcoding their root/workspace/grafana-url/extra-secret-name
+here -- this hook is driven from the exact same config the CronWorkflow entries
+already use (values-scaleway.yaml), so it can't drift from them.
+*/ -}}
+{{- $entries := dict }}
+{{- range .Values.terraformRoots }}
+{{- $_ := set $entries .name . }}
+{{- end }}
+{{- $bootstrap := index $entries "grafana-bootstrap" }}
+{{- $managed := index $entries "grafana-managed" }}
+# ArgoCD-native PostSync hook: a Workflow object declared directly, no
+# wrapper Job/ConfigMap/RBAC. Closes the gap this Application's own wave-6
+# placement comment (bootstrap/values.yaml) flags as follow-up work --
+# wave 6 guarantees `grafana` (wave 5) is already Healthy by the time this
+# Application syncs, but grafana-bootstrap/grafana-managed still wouldn't
+# run until their next scheduled cron tick otherwise -- up to ~50 minutes
+# later on a fresh rebuild.
+#
+# Fixed name (not generateName), same as grafana-restore-job.yaml/
+# cert-restore-job.yaml's own hook resources -- BeforeHookCreation needs a
+# stable name to find and delete the previous sync's instance before
+# creating this one.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: grafana-initial-run
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    # BeforeHookCreation only (not also HookSucceeded): delete the
+    # previous sync's Workflow right before creating a fresh one each
+    # sync, but leave *this* sync's instance around afterward instead of
+    # deleting it immediately.
+    #
+    # ArgoCD has no built-in health check for argoproj.io/Workflow
+    # (confirmed against argo-cd's own resource_customizations directory --
+    # entries exist for CronWorkflow/WorkflowTemplate but not bare
+    # Workflow), so it marks this hook Succeeded the moment the object is
+    # created, not when Terraform actually finishes. That's fine here: the
+    # hook's only job is to trigger the run sooner than the next cron
+    # tick, not to block ArgoCD's sync on completion. Outcome is
+    # checkable afterward via `kubectl get workflow -n
+    # {{ .Values.namespace }}` or the Argo UI (services/platform/argo-workflows/gateway);
+    # the hourly CronWorkflow schedule is still there as a backstop
+    # either way.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  entrypoint: main
+  templates:
+    - name: main
+      dag:
+        # Sequencing (grafana-managed reads grafana-bootstrap's
+        # service_account_token via data.terraform_remote_state, so it
+        # must run after, not concurrently) is Argo's own DAG `depends`,
+        # tracked by the workflow controller -- not something this
+        # manifest needs bash for. Both tasks reuse the shared `apply`
+        # template already defined in workflowtemplate.yaml via
+        # templateRef, same template every CronWorkflow entry runs.
+        tasks:
+          - name: bootstrap
+            templateRef: {name: terraform-apply, template: apply}
+            arguments:
+              parameters:
+                - {name: root, value: {{ $bootstrap.root | quote }}}
+                - {name: workspace, value: {{ $bootstrap.workspace | quote }}}
+                - {name: vault-address, value: {{ $bootstrap.vaultAddress | quote }}}
+                - {name: grafana-url, value: {{ $bootstrap.grafanaUrl | quote }}}
+                - {name: extra-secret-name, value: {{ $bootstrap.extraSecretName | quote }}}
+          - name: managed
+            depends: "bootstrap.Succeeded"
+            templateRef: {name: terraform-apply, template: apply}
+            arguments:
+              parameters:
+                - {name: root, value: {{ $managed.root | quote }}}
+                - {name: workspace, value: {{ $managed.workspace | quote }}}
+                - {name: vault-address, value: {{ $managed.vaultAddress | quote }}}
+                - {name: grafana-url, value: {{ $managed.grafanaUrl | quote }}}
+                - {name: extra-secret-name, value: {{ $managed.extraSecretName | quote }}}
+{{- end }}
