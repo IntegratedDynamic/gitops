@@ -1,0 +1,8 @@
+namespace: argocd
+
+# Must match the Prometheus CR's ruleSelector (confirmed live against the
+# cluster, not assumed): services/platform/monitoring/chart doesn't
+# override prometheus.prometheusSpec.ruleSelector, so the kube-prometheus-
+# stack chart's own default applies -- ruleSelectorNilUsesHelmValues,
+# which only picks up PrometheusRules carrying this exact release label.
+ruleSelectorLabel: kube-prometheus-stack

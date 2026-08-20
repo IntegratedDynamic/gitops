@@ -110,6 +110,13 @@ dex:
         redirectURIs:
           # Grafana's fixed generic_oauth callback path.
           - https://grafana.scalepack.fr/login/generic_oauth
+      - id: argo-workflows
+        name: Argo Workflows
+        secretEnv: ARGO_WORKFLOWS_CLIENT_SECRET
+        redirectURIs:
+          # Argo Server's fixed SSO callback path (server.sso.redirectUrl,
+          # services/platform/argo-workflows/chart/values-scaleway.yaml).
+          - https://argo-workflows.scalepack.fr/oauth2/callback
 
   envVars:
     - name: GITHUB_CLIENT_ID
@@ -142,6 +149,11 @@ dex:
         secretKeyRef:
           name: dex-credentials
           key: grafana-client-secret
+    - name: ARGO_WORKFLOWS_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: argo-workflows-client-secret
 
   resources:
     requests:

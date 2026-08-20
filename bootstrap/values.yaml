@@ -14,6 +14,7 @@ env: local
 # any other value. Overriding it on your own branch is a handy DevX trick to
 # deploy the whole tree from that branch; just don't merge that change in.
 # TODO(validation): enforce `revision: main` as a PR check before merge.
+#
 revision: main
 repoURL: https://github.com/IntegratedDynamic/gitops.git
 
@@ -110,15 +111,26 @@ scalewayApps:
   # and removes the need for a dedicated verify Job per consumer.
   - {name: external-secrets, namespace: external-secrets, chartPath: services/platform/external-secrets/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['external-secrets.podLabels.scalepack\.fr/sync-wave', 'external-secrets.webhook.podLabels.scalepack\.fr/sync-wave', 'external-secrets.certController.podLabels.scalepack\.fr/sync-wave']}
   - {name: secrets-sync, namespace: secrets-sync, chartPath: services/platform/secrets-sync/config, valueFile: values-scaleway.yaml, wave: "1"}
-  # argo-workflows (2026-08-19): the workflow-controller engine itself —
-  # no dependency on anything else in this wave (same "independent, coexists
-  # fine" logic as external-secrets/secrets-sync sharing it), but
-  # terraform-apply (wave 2 below) needs its CRDs actually
+  # dex (2026-08-20): moved up from wave 6 -- confirmed live it was the
+  # actual blocker for any in-cluster-native-OIDC consumer that does EAGER
+  # discovery at startup (argo-server crash-loops if its dial fails, unlike
+  # Grafana/ArgoCD's own OIDC which only dial Dex lazily on an actual login
+  # attempt): Dex itself has no dependency beyond its own dex-secret
+  # (this wave) -- only its PUBLIC exposure (dex-gateway's HTTPRoute,
+  # unchanged at wave 6) actually needs the Gateway. Splitting "the
+  # workload" from "-gateway" this way already exists as this repo's own
+  # pattern (see wave 4-7's *-gateway charts).
+  - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
+  # argo-workflows (2026-08-19, moved to wave 2 2026-08-20): the
+  # workflow-controller AND server (server.enabled, 2026-08-20) — the
+  # server's SSO now dials Dex in-cluster (services/platform/argo-workflows/chart's
+  # server.sso.issuer), so this has to sync after wave 1's dex above, not
+  # share a wave with it. terraform-apply (wave 6, needs this wave's CRDs
   # Established before creating a CronWorkflow CR — a hard, non-self-healing
   # dependency at the API level, same class as kube-prometheus-stack-crds ->
-  # kube-prometheus-stack (wave 2/3's own comment) — so the engine can't
-  # share a wave with its own CronWorkflow instance.
-  - {name: argo-workflows, namespace: argo-workflows, chartPath: services/platform/argo-workflows/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['argo-workflows.controller.podLabels.scalepack\.fr/sync-wave']}
+  # kube-prometheus-stack) is unaffected: wave 2 still comfortably precedes
+  # wave 6.
+  - {name: argo-workflows, namespace: argo-workflows, chartPath: services/platform/argo-workflows/chart, valueFile: values-scaleway.yaml, wave: "2", syncWaveLabelPaths: ['argo-workflows.controller.podLabels.scalepack\.fr/sync-wave']}
   - {name: velero-secret, namespace: velero, chartPath: services/platform/velero/secret, valueFile: values.yaml, wave: "1"}
   - {name: cert-manager-webhook-secret, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-secret, valueFile: values.yaml, wave: "1"}
   - {name: wireguard-secret, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/secret, valueFile: values-scaleway.yaml, wave: "1"}
@@ -174,15 +186,6 @@ scalewayApps:
   # grafana-gateway's HTTPRoute (which stays at wave 7, see that wave's
   # comment).
   - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "2"}
-  # terraform-apply (2026-08-19): one WorkflowTemplate + one CronWorkflow
-  # per Terraform root that needs to run from inside the cluster (today
-  # 05-secrets/openbao/managed and 06-monitoring/grafana/{bootstrap,managed}
-  # — see services/platform/argo-workflows/terraform-apply/Chart.yaml) —
-  # needs wave 1's argo-workflows chart to have actually Established its
-  # CRDs first (see that entry's comment). Unrelated to kube-prometheus-
-  # stack-crds sharing this wave — same "no interdependency, wave reuse is
-  # free" logic as every other multi-app wave in this file.
-  - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "2"}
 
   # wave 3 (2026-08-13, previously an intentionally-unused gap — see wave
   # 1's comment history) — kube-prometheus-stack + grafana-config, moved
@@ -257,6 +260,11 @@ scalewayApps:
   # same way those three already coexist here. See gitops#29.
   - {name: alloy, namespace: monitoring, chartPath: services/platform/monitoring/alloy-chart, valueFile: values-scaleway.yaml, wave: "4"}
   - {name: otel-collector, namespace: monitoring, chartPath: services/platform/otel-collector/chart, valueFile: values-scaleway.yaml, wave: "4"}
+  # argocd-config-monitoring (2026-08-20): PrometheusRule, needs wave 3's
+  # kube-prometheus-stack-crds Established first (the monitoring.coreos.dev
+  # CRDs) -- shares this wave for the same "no interdependency, wave reuse
+  # is free" reasoning as everything else here.
+  - {name: argocd-config-monitoring, namespace: argocd, chartPath: services/platform/argocd-config/monitoring, valueFile: values.yaml, wave: "4"}
 
   # wave 5 — gateway-config needs BOTH wave 4's envoy-gateway (Gateway API
   # CRDs, for its own Gateway/GatewayClass/HTTPRoute) AND wave 4's
@@ -289,18 +297,20 @@ scalewayApps:
   # uses produced a live-broken manifest for this specific chart).
   - {name: grafana, namespace: monitoring, chartPath: services/platform/monitoring/grafana-chart, valueFile: values-scaleway.yaml, wave: "5"}
 
-  # wave 6 — platform: wireguard, Dex, external-dns. All of these need
-  # wave 5's gateway-config to have actually finished reconciling —
+  # wave 6 — platform: wireguard, Dex's gateway, external-dns. All of these
+  # need wave 5's gateway-config to have actually finished reconciling —
   # wireguard-config's proxy-gateway sidecar for the Service envoy-gateway
   # provisions once gateway-config's Gateway object exists (confirmed live
   # 2026-08-12: crash-loops on an empty `kubectl get svc -l gateway.
-  # envoyproxy.io/owning-gateway-name=scaleway-gateway` otherwise). Dex/
-  # external-dns don't strictly need the Gateway itself (their own
-  # HTTPRoute/DNS-record reconciliation is soft/eventually-consistent, not
-  # a hard CRD-registration dependency like gateway-config's ClusterIssuer
-  # was) but ride along here rather than getting their own wave — no
-  # observed race for either. dex-gateway is HTTPRoute-only now (its
-  # ExternalSecret moved to dex-secret, wave 1 — see that wave's comment).
+  # envoyproxy.io/owning-gateway-name=scaleway-gateway` otherwise).
+  # external-dns doesn't strictly need the Gateway itself (its own
+  # DNS-record reconciliation is soft/eventually-consistent, not a hard
+  # CRD-registration dependency like gateway-config's ClusterIssuer was)
+  # but rides along here rather than getting its own wave — no observed
+  # race. dex-gateway is HTTPRoute-only (its ExternalSecret moved to
+  # dex-secret, wave 1 — see that wave's comment; the Dex server itself
+  # moved up to wave 1 too, 2026-08-20 — see that entry's comment) — it
+  # alone still needs to wait here, for the Gateway its HTTPRoute binds to.
   # Renamed twice on 2026-08-13: first dex-init -> dex-config (still
   # imprecise — "config" doesn't say what it actually creates), then
   # dex-config -> dex-gateway once every other HTTPRoute-only/HTTPRoute-
@@ -333,8 +343,21 @@ scalewayApps:
   # site is unaffected and stays enabled.
   # - {name: wireguard-exit-config, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/config, valueFile: values-scaleway.yaml, wave: "6"}
   - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
-  - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
   - {name: external-dns, namespace: external-dns, chartPath: services/platform/external-dns/chart, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['external-dns.podLabels.scalepack\.fr/sync-wave']}
+  # terraform-apply: TEMPORARILY moved here from wave 2 (2026-08-20) —
+  # confirmed live that running it as early as wave 2 fires the
+  # grafana-bootstrap/grafana-managed CronWorkflows before `grafana` (wave
+  # 5) has even synced, so every run fails until the cluster's next
+  # scheduled trigger happens to land after wave 5. Wave 2 only ever
+  # guaranteed argo-workflows' own CRDs were Established (this entry's
+  # original comment, now moved with it below), never that terraform-apply's
+  # *targets* existed — grafana wasn't a dependency this wave-gating scheme
+  # accounted for. Wave 6 is a blunt fix (grafana is wave 5, so this now
+  # always runs after it) — proper per-root dependency/health gating
+  # (openbao-managed's own dependency is OpenBao itself, wave 0, so it
+  # doesn't actually need to wait this long) is follow-up work, not done
+  # here.
+  - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "6"}
 
   # wave 7 — argocd-config/openbao-gateway ride along together: same
   # prerequisite (Gateway + Dex from wave 6), no named stage of their own.
@@ -351,6 +374,10 @@ scalewayApps:
   - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: argocd-config-gateway, namespace: argocd, chartPath: services/platform/argocd-config/gateway, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: openbao-gateway, namespace: openbao, chartPath: services/platform/openbao/gateway, valueFile: values-scaleway.yaml, wave: "7"}
+  # argo-workflows-gateway (2026-08-20): same "real dependency is Gateway +
+  # Dex from wave 6" reasoning as every other *-gateway chart in this wave —
+  # exposes the Argo Server UI/API enabled in services/platform/argo-workflows/chart.
+  - {name: argo-workflows-gateway, namespace: argo-workflows, chartPath: services/platform/argo-workflows/gateway, valueFile: values.yaml, wave: "7"}
 
   # wave 8 — products.
   - {name: demo, namespace: demo, chartPath: services/products/demo/chart, valueFile: values-scaleway.yaml, wave: "8", syncWaveLabelPaths: ['syncWave']}

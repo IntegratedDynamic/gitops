@@ -1,0 +1,14 @@
+# Exposes Argo Server at argo-workflows.scalepack.fr via HTTPRoute.
+namespace: argo-workflows
+
+# Service created by the argo-workflows Helm chart (release name ==
+# chart-instance name "argo-workflows", official chart's fullname helper
+# appends "-server") -- confirmed via `helm template`, not assumed.
+argoServer:
+  serviceName: argo-workflows-server
+  servicePort: 2746
+
+gateway:
+  hostname: argo-workflows.scalepack.fr
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
