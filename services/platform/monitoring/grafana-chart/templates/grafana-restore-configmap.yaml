@@ -44,21 +44,23 @@ data:
       sleep 10
     done
 
-    # includedResources is just persistentvolumeclaims (not also
-    # persistentvolumes, dropped 2026-08-20 / infra#75): since the
-    # grafana-data schedule now backs this PVC up via CSI VolumeSnapshot
-    # (services/platform/velero/chart/values-scaleway.yaml), Velero's own
-    # PVC restore-item-action pulls in the associated VolumeSnapshot/
-    # VolumeSnapshotContent and reprovisions the PVC directly — no owning
-    # Pod required at all, unlike the file-system-backup restore this
+    # includedResources needs volumesnapshots/volumesnapshotcontents
+    # alongside persistentvolumeclaims, not just the PVC alone (dropped
+    # persistentvolumes 2026-08-20 / infra#75, learned the hard way that
+    # dropping too much breaks CSI restore too): Velero's PVC
+    # restore-item-action unconditionally patches the restored PVC's
+    # dataSourceRef to point at the backup's VolumeSnapshot by name, but
+    # only actually *recreates* that VolumeSnapshot/VolumeSnapshotContent
+    # object if those kinds are themselves in this allowlist. Without them,
+    # confirmed live: the PVC ends up with a dangling dataSourceRef and the
+    # CSI provisioner fails with "error getting snapshot ... not found" —
+    # looks identical to a healthy CSI restore in `velero restore describe`
+    # (phase Completed) until the PVC itself is inspected. No owning Pod
+    # required either way, unlike the file-system-backup restore this
     # replaced (confirmed against Velero's docs: that mechanism only
     # triggers via a restored Pod object, which can't work in this
     # PreSync-hook-before-Deployment ordering, see this Application's
-    # values-scaleway.yaml comment). Restoring the *original*
-    # persistentvolumes object alongside it risked pointing at a
-    # stale/deleted disk ID and conflicting with the fresh CSI-provisioned
-    # PV — not confirmed from Velero's docs alone, confirm live if a
-    # restore ever fails validation on this point.
+    # values-scaleway.yaml comment).
     cat <<EOF | kubectl create -f -
     {
       "apiVersion": "velero.io/v1",
@@ -73,7 +75,7 @@ data:
         "labelSelector": {
           "matchLabels": {"app.kubernetes.io/name": "grafana"}
         },
-        "includedResources": ["persistentvolumeclaims"]
+        "includedResources": ["persistentvolumeclaims", "volumesnapshots", "volumesnapshotcontents"]
       }
     }
     EOF
