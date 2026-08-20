@@ -49,6 +49,18 @@ metadata:
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   entrypoint: main
+  # templateRef only pulls in the referenced template's own definition
+  # (workflowtemplate.yaml's `apply`), not that WorkflowTemplate's
+  # top-level spec.volumes/serviceAccountName -- this Workflow is what
+  # actually runs the pods, so it needs its own copies of whatever the
+  # `apply` template's container/volumeMounts depend on. Confirmed live
+  # (infra#75 rebuild test): omitting `volumes` here failed every task with
+  # "volume 'workspace' not found in workflow spec" before a single
+  # container even started.
+  serviceAccountName: {{ .Values.serviceAccountName }}
+  volumes:
+    - name: workspace
+      emptyDir: {}
   templates:
     - name: main
       dag:
