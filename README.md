@@ -186,6 +186,16 @@ ArgoCD takes a few minutes to reconcile all apps — be patient. The difference 
 kubectl --context minikube get applications -n argocd
 ```
 
+**If `bootstrap`'s sync operation looks stuck** (same `operationState.message` for several minutes, no new Applications appearing): check what revision it's actually running against —
+```bash
+kubectl get application bootstrap -n argocd -o jsonpath='{.status.operationState.operation.sync.revision}'
+```
+Confirmed live 2026-08-20: a hard refresh (`kubectl annotate application bootstrap -n argocd argocd.argoproj.io/refresh=hard --overwrite`) or re-patching `.operation` with a new sync request does **not** reliably restart an in-flight operation — it can keep retrying against a stale revision it captured when it first started, even after newer commits landed on the tracked branch. What actually forces a genuinely fresh operation:
+```bash
+kubectl patch application bootstrap -n argocd --type merge -p '{"operation":null}'
+```
+Clearing `.operation` outright (not just re-setting it) makes the controller pick up a brand new operation against current `HEAD` on its own, via the existing automated+selfHeal sync policy — no need to manually re-specify `sync.revision` yourself.
+
 **Important:** before running, check `infrastructure/02-cluster/local/nico.auto.tfvars` — it contains the `gitops_revision` variable that controls which branch of this repo ArgoCD will deploy from. If you're testing a feature branch, set it there:
 ```hcl
 gitops_revision = "feat/your-branch"

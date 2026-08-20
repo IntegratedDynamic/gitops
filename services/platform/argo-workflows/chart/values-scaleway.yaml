@@ -3,11 +3,103 @@
 # chart/Chart.yaml) — Helm only exposes a subchart the values under its
 # dependency name.
 argo-workflows:
-  # Only the workflow-controller is needed (runs the terraform-openbao-apply
-  # CronWorkflow) — see Chart.yaml's description for why the Argo Server
-  # (UI/API) stays disabled.
+  # Argo Server (UI/API) — enabled 2026-08-20 so workflows/CronWorkflows can
+  # be inspected and manipulated by hand, not just triggered by
+  # terraform-apply's own CronWorkflows. Native OIDC against our shared Dex,
+  # same pattern as ArgoCD/Grafana (see
+  # services/platform/dex/chart/values-scaleway.yaml's staticClients.argo-workflows) —
+  # exposed at argo-workflows.scalepack.fr via
+  # services/platform/argo-workflows/gateway.
   server:
-    enabled: false
+    enabled: true
+    authModes:
+      - sso
+    sso:
+      enabled: true
+      # In-cluster Dex address, not the public https://auth.scalepack.fr --
+      # confirmed live 2026-08-20: unlike Grafana/ArgoCD's own OIDC (which
+      # only dial Dex lazily, on an actual login attempt), argo-server does
+      # EAGER OIDC discovery at startup and crash-loops if that dial fails.
+      # Pods can't reliably reach the cluster's own public route from
+      # inside (same hairpin-NAT gap already fixed for OpenBao's
+      # vault_address and Grafana's grafana_url). issuerAlias below is what
+      # makes this safe: it's not just a fallback validator, it's argo-
+      # server's actual mechanism (server/auth/sso/sso.go,
+      # oidc.InsecureIssuerURLContext) for "dial this URL for
+      # discovery/JWKS/token-exchange, but accept this OTHER string as the
+      # token's iss claim" -- Dex's own issuer config stays the public URL
+      # (services/platform/dex/chart/values-scaleway.yaml), so tokens it
+      # issues still carry https://auth.scalepack.fr regardless of which
+      # URL was dialed to fetch its discovery document.
+      issuer: http://dex.gateway.svc:5556
+      issuerAlias: https://auth.scalepack.fr
+      clientId:
+        name: argo-workflows-sso
+        key: client-id
+      clientSecret:
+        name: argo-workflows-sso
+        key: client-secret
+      # Argo Server's fixed SSO callback path.
+      redirectUrl: https://argo-workflows.scalepack.fr/oauth2/callback
+      # Same "groups" claim ArgoCD's rbac.policy.csv and Grafana's
+      # role_attribute_path already key off of.
+      scopes:
+        - groups
+      rbac:
+        enabled: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  # SSO RBAC: maps the OIDC identity to a ServiceAccount via the
+  # workflows.argoproj.io/rbac-rule annotation (Argo's own documented
+  # mechanism — https://argo-workflows.readthedocs.io/en/stable/argo-server-sso/#sso-rbac),
+  # bound to the chart's own pre-built argo-workflows-admin ClusterRole
+  # (full manipulate access) rather than a hand-rolled Role, since this is a
+  # single-admin homelab cluster, not a multi-tenant one. The token Secret
+  # is required explicitly (K8s 1.24+ no longer auto-creates one per
+  # ServiceAccount) — AND argo-server looks it up by a fixed, hardcoded
+  # name, not by scanning for the kubernetes.io/service-account.name
+  # annotation: confirmed live 2026-08-20, rbac-rule matched fine
+  # ("selected SSO RBAC service account for user") but every API call still
+  # 403'd with "failed to get service account secret: secrets
+  # \"argo-workflows-sso-admin.service-account-token\" not found" — the
+  # chart's own docs require the exact name
+  # "<service-account-name>.service-account-token".
+  extraObjects:
+    - apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: argo-workflows-sso-admin
+        namespace: argo-workflows
+        annotations:
+          workflows.argoproj.io/rbac-rule: "'IntegratedDynamic:Admin' in groups"
+          workflows.argoproj.io/rbac-rule-precedence: "1"
+    - apiVersion: v1
+      kind: Secret
+      type: kubernetes.io/service-account-token
+      metadata:
+        name: argo-workflows-sso-admin.service-account-token
+        namespace: argo-workflows
+        annotations:
+          kubernetes.io/service-account.name: argo-workflows-sso-admin
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: argo-workflows-sso-admin
+        namespace: argo-workflows
+      subjects:
+        - kind: ServiceAccount
+          name: argo-workflows-sso-admin
+          namespace: argo-workflows
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: argo-workflows-admin
 
   # Scoped to this one namespace instead of watching Workflows across the
   # whole cluster — the only Workflow that exists today
@@ -25,6 +117,21 @@ argo-workflows:
       create: true
 
   controller:
+    # Cluster-wide fallback for any Workflow that doesn't set its own
+    # podGC/ttlStrategy — terraform-apply's own WorkflowTemplate already
+    # sets these explicitly (see terraform-apply/templates/
+    # workflowtemplate.yaml's comment on why OnWorkflowSuccess, not
+    # OnPodCompletion, matters for debugging a failed run), but the Argo UI
+    # warns ("Your pod GC settings will delete pods immediately on
+    # completion") on anything submitted without an explicit strategy —
+    # e.g. an ad-hoc Workflow run by hand from the UI. Same values as that
+    # WorkflowTemplate, just as a safety net instead of per-template opt-in.
+    workflowDefaults:
+      spec:
+        podGC:
+          strategy: OnWorkflowSuccess
+        ttlStrategy:
+          secondsAfterCompletion: 86400
     # Soft "spread pods from this same sync-wave across nodes" — every chart
     # in this repo gets the same pattern (see e.g.
     # services/platform/cert-manager/chart/values-scaleway.yaml's comment).
