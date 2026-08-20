@@ -44,6 +44,21 @@ data:
       sleep 10
     done
 
+    # includedResources is just persistentvolumeclaims (not also
+    # persistentvolumes, dropped 2026-08-20 / infra#75): since the
+    # grafana-data schedule now backs this PVC up via CSI VolumeSnapshot
+    # (services/platform/velero/chart/values-scaleway.yaml), Velero's own
+    # PVC restore-item-action pulls in the associated VolumeSnapshot/
+    # VolumeSnapshotContent and reprovisions the PVC directly — no owning
+    # Pod required at all, unlike the file-system-backup restore this
+    # replaced (confirmed against Velero's docs: that mechanism only
+    # triggers via a restored Pod object, which can't work in this
+    # PreSync-hook-before-Deployment ordering, see this Application's
+    # values-scaleway.yaml comment). Restoring the *original*
+    # persistentvolumes object alongside it risked pointing at a
+    # stale/deleted disk ID and conflicting with the fresh CSI-provisioned
+    # PV — not confirmed from Velero's docs alone, confirm live if a
+    # restore ever fails validation on this point.
     cat <<EOF | kubectl create -f -
     {
       "apiVersion": "velero.io/v1",
@@ -58,7 +73,7 @@ data:
         "labelSelector": {
           "matchLabels": {"app.kubernetes.io/name": "grafana"}
         },
-        "includedResources": ["persistentvolumeclaims", "persistentvolumes"]
+        "includedResources": ["persistentvolumeclaims"]
       }
     }
     EOF
