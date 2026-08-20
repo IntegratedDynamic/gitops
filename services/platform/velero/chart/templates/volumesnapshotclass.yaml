@@ -1,0 +1,19 @@
+# Dedicated VolumeSnapshotClass for Velero's CSI backups (values-scaleway.yaml's
+# grafana-data schedule + configuration.features: EnableCSI) — deliberately a
+# separate object from Kapsule's own system-managed scw-snapshot/
+# scw-snapshot-retain (labeled k8s.scw.cloud/system: csi, confirmed live on
+# every cluster out of the box) rather than hand-editing those to add
+# Velero's selection label below. Same driver, so Velero's snapshots land in
+# the same underlying Scaleway snapshot mechanism either way.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: velero-scw-snapshot
+  labels:
+    # How Velero's CSI plugin picks a VolumeSnapshotClass for a given
+    # driver when backing up a PVC — see https://velero.io/docs/v1.18/csi/.
+    velero.io/csi-volumesnapshot-class: "true"
+driver: csi.scaleway.com
+# Not is-default-class: this is Velero's own class, not a change to
+# cluster-wide default dynamic-provisioning-from-snapshot behavior.
+deletionPolicy: Delete

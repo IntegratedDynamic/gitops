@@ -81,13 +81,13 @@ grafana:
     type: pvc
     size: 2Gi
     accessModes: [ReadWriteOnce]
-  # backup-volumes names the pod volume (not a path) Velero's node-agent
-  # should fs-backup — "storage" is the volume name the grafana chart
-  # mounts at /var/lib/grafana (confirmed against its own pod template).
-  # Paired with the grafana-data Schedule's labelSelector, which matches
-  # this pod's own app.kubernetes.io/name=grafana label.
-  podAnnotations:
-    backup.velero.io/backup-volumes: storage
+  # No backup.velero.io/backup-volumes annotation here (used to force
+  # node-agent/kopia file-system backup of the "storage" volume) — since
+  # infra#75, services/platform/velero/chart/values-scaleway.yaml's
+  # grafana-data schedule backs this PVC up via CSI VolumeSnapshot instead,
+  # which is StorageClass/PVC-driven, not annotation-driven. Leaving this
+  # annotation in place would make Velero attempt both mechanisms on the
+  # same volume.
   # Grafana 13's bleve-backend search indexer (dashboards/folders/
   # playlists) burns real CPU continuously, not just at startup —
   # observed live pegging a full node at ~2 CPU / 94% memory with
