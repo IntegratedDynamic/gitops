@@ -23,6 +23,25 @@ terraformImage: hashicorp/terraform:1.14
 # a per-bucket scaleway_object_bucket_policy was tried and reverted).
 scalewayCredentialsSecretName: argo-workflows-scaleway-state-credentials
 
+# PostSync hook (templates/initial-run-workflow.yaml): a Workflow object
+# declared directly -- no wrapper Job/ConfigMap/RBAC, ArgoCD's own
+# controller creates it as part of this Application's sync, same as every
+# other resource here. Runs grafana-bootstrap then grafana-managed
+# immediately once this Application syncs, instead of waiting for their
+# next hourly CronWorkflow trigger. Closes the gap the terraform-apply
+# entry's own wave-6 comment below flags as follow-up work -- ArgoCD
+# already guarantees wave 5 (grafana) is Healthy by the time this
+# Application (wave 6) syncs, so there's no reason left to also wait out
+# the cron cadence. Deliberately scoped to just these two roots (hardcoded
+# in initial-run-workflow.yaml, not a loop over every terraformRoots entry
+# below) -- openbao-managed doesn't have this problem the same way (its
+# actual data restore is its own raft-snapshot mechanism), and
+# generalizing this to "run every root once immediately" is the "proper
+# per-root dependency/health gating" that comment already calls out as
+# separate work.
+initialRun:
+  enabled: true
+
 resources:
   gitClone:
     requests: {cpu: 10m, memory: 32Mi}
