@@ -1,5 +1,0 @@
-apiVersion: v2
-name: grafana-config
-description: Grafana's letsencrypt-staging CA bundle ConfigMap (OIDC/admin secrets moved to services/platform/monitoring/grafana-secret, HTTPRoute moved to services/platform/monitoring/grafana-gateway)
-type: application
-version: 0.1.0

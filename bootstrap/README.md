@@ -126,25 +126,30 @@ prerequisites are OpenBao + ESO (wave 0/1), not cert-manager/gateway/dex
 Prometheus/Grafana pods themselves to run, only for grafana-gateway's
 HTTPRoute (which stays at wave 7).
 
-## Wave 3 — kube-prometheus-stack, grafana-config, loki, tempo
+## Wave 3 — kube-prometheus-stack, loki, tempo
 
 Moved up from wave 7 (2026-08-13) for the same reason kube-prometheus-stack-crds
 moved to wave 2: their real prerequisites are wave 2's CRDs (`skipCrds:
-true` already set) and wave 1's secrets (thanos-secret). grafana-config
-bundles in here too: it's now just its TEMPORARY letsencrypt-staging CA
-bundle ConfigMap (its two ExternalSecrets moved to grafana-secret, wave 1,
-same fix as every other `<product>/secret` extraction) — a pure,
-non-blocking prerequisite ConfigMap Grafana mounts, same "bundle a
-co-requisite in the same wave" tradeoff already accepted for
-openbao/openbao-init and velero/envoy-gateway/cert-manager.
+true` already set) and wave 1's secrets (thanos-secret).
 
 Grafana itself moved OUT of this wave on 2026-08-14, into its own `grafana`
 Application (wave 5) — its grafana-restore-* PreSync hook (Velero PVC
 restore) needs the `velero` namespace/CRDs to exist first, and this wave
-(3) runs before velero's wave (4). grafana-config's CA ConfigMap stays here
-regardless: Grafana mounts it by fixed ConfigMap name, not by anything
-derived from this chart's own release, so which wave produces it doesn't
-matter to the consumer.
+(3) runs before velero's wave (4).
+
+`grafana-config` used to bundle in here too (its only content was a
+TEMPORARY letsencrypt-staging CA bundle ConfigMap, needed while
+gateway-config ran `letsencrypt-staging` — see that chart's own history
+above/below). Removed entirely 2026-08-22: gateway-config has been back on
+`letsencrypt-prod` since 2026-08-20, so the staging-only CA override was
+dead weight (worse, actively wrong — it no longer matched the cert Dex
+actually serves). See the matching removal in
+`services/platform/monitoring/grafana-chart/values-scaleway.yaml`
+(`auth.generic_oauth.tls_client_ca` + `extraConfigmapMounts`) and the
+infrastructure repo's `10-cluster/scaleway/argocd.tf` (`oidc.config.rootCA`)
+and `05-secrets/openbao/managed/main.tf`
+(`oidc_discovery_ca_pem`) — same temporary CA, three consumers, removed
+together.
 
 loki / tempo: same "real prerequisite is wave 1's secret, not anything
 cert-manager/gateway/dex-related" reasoning as kube-prometheus-stack — see

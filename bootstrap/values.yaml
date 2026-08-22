@@ -109,14 +109,14 @@ scalewayApps:
   - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "2"}
 
   # ── wave 3 ────────────────────────────────────────────────────────────
-  # kube-prometheus-stack + grafana-config + loki/tempo: real prerequisites
-  # are wave 2's CRDs and wave 1's secrets, nothing cert-manager/gateway/
-  # dex-related -- see gitops#29. grafana-config is now just its TEMPORARY
-  # letsencrypt-staging CA bundle ConfigMap (its ExternalSecrets moved to
-  # grafana-secret, wave 1); Grafana itself moved out to its own `grafana`
-  # Application (wave 5) since its restore hook needs the `velero`
-  # namespace to exist first, which this wave predates.
-  - {name: grafana-config, namespace: monitoring, chartPath: services/platform/monitoring/grafana-config, valueFile: values-scaleway.yaml, wave: "3"}
+  # kube-prometheus-stack + loki/tempo: real prerequisites are wave 2's
+  # CRDs and wave 1's secrets, nothing cert-manager/gateway/dex-related --
+  # see gitops#29. Grafana itself moved out to its own `grafana` Application
+  # (wave 5) since its restore hook needs the `velero` namespace to exist
+  # first, which this wave predates. (grafana-config, which used to sit
+  # here too, removed 2026-08-22 -- it was only ever its TEMPORARY
+  # letsencrypt-staging CA bundle ConfigMap, dead weight now that
+  # gateway-config is back on letsencrypt-prod.)
   - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "3", skipCrds: true, syncWaveLabelPaths: ['kube-prometheus-stack.prometheus.prometheusSpec.podMetadata.labels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheusOperator.podLabels.scalepack\.fr/sync-wave']}
   - {name: loki, namespace: monitoring, chartPath: services/platform/monitoring/loki-chart, valueFile: values-scaleway.yaml, wave: "3"}
   - {name: tempo, namespace: monitoring, chartPath: services/platform/monitoring/tempo-chart, valueFile: values-scaleway.yaml, wave: "3"}
