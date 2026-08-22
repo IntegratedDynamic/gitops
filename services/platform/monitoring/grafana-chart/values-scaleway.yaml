@@ -180,15 +180,6 @@ grafana:
       auth_url: https://auth.scalepack.fr/auth
       token_url: https://auth.scalepack.fr/token
       api_url: https://auth.scalepack.fr/userinfo
-      # TEMPORARY (fix/gateway-staging-ca): while
-      # services/platform/gateway/config runs letsencrypt-staging, Grafana's
-      # server-side calls above fail TLS verification against
-      # Dex's staging-signed cert ("x509: certificate signed by
-      # unknown authority", confirmed live) — the pod's system
-      # trust store has no idea about Let's Encrypt's staging CA.
-      # Points at the bundle services/platform/monitoring/grafana-config's ConfigMap mounts
-      # below. Remove both once back on letsencrypt-prod.
-      tls_client_ca: /etc/grafana/certs/letsencrypt-staging/ca-bundle.pem
       # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
       # rbac.policy.csv grants role:admin to — everyone else (no
       # team, or a different team) falls back to Viewer. NOTE:
@@ -204,11 +195,3 @@ grafana:
       secretKeyRef:
         name: grafana-oidc-client-secret
         key: client-secret
-
-  # TEMPORARY (fix/gateway-staging-ca) — backs tls_client_ca
-  # above. ConfigMap created by services/platform/monitoring/grafana-config.
-  extraConfigmapMounts:
-    - name: letsencrypt-staging-ca
-      configMap: letsencrypt-staging-ca
-      mountPath: /etc/grafana/certs/letsencrypt-staging
-      readOnly: true

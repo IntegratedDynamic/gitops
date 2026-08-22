@@ -1,5 +1,0 @@
-# Disabled by default — this chart's only remaining content (the TEMPORARY
-# letsencrypt-staging CA bundle ConfigMap, see templates/configmap-ca.yaml)
-# only makes sense on scaleway (see values-scaleway.yaml). OIDC/admin
-# secrets moved to services/platform/monitoring/grafana-secret.
-enabled: false
