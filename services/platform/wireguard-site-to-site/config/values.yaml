@@ -7,12 +7,13 @@
 # repo's 04-vpn/wireguard-site-to-site/README.md for the full design and where every
 # key in this chart's values actually comes from.
 #
-# This pod terminates the tunnel and proxies to each target in
-# proxyTargets below at the application layer (see templates/deployment.yaml,
-# one sidecar container per entry) rather than routing/NAT-ing at the kernel
-# layer — a first attempt used net.ipv4.ip_forward + iptables MASQUERADE,
-# which needs the node pool's kubelet to allowlist those as "unsafe
-# sysctls". Confirmed live 2026-08-09 that's a dead end twice over:
+# This pod terminates the tunnel and proxies to whatever internal target a
+# peer's own request names (dynamicProxy below) at the application layer
+# (see templates/deployment.yaml's proxy-dynamic sidecar) rather than
+# routing/NAT-ing at the kernel layer — a first attempt used
+# net.ipv4.ip_forward + iptables MASQUERADE, which needs the node pool's
+# kubelet to allowlist those as "unsafe sysctls". Confirmed live 2026-08-09
+# that's a dead end twice over:
 # Scaleway's kubelet_args API rejects widening that allowlist for this
 # cluster's k8s version at all, and even where it is available, it's a
 # cluster-wide relaxation for one workload's benefit — worth avoiding on
@@ -54,9 +55,8 @@ syncWave: "0"
 # the "cluster.local" suffix, and the shorter *.<namespace>.svc form Argo
 # Workflows already uses in-cluster, matched via the "svc" suffix) instead
 # of one hostname hardcoded per target. A peer resolving any such name gets
-# this pod's address; templates/deployment.yaml's proxyTargets sidecars are
-# what actually deliver the traffic onward (see that map below for why a
-# per-target listener is still needed even with generic DNS).
+# this pod's address; dynamicProxy below (templates/deployment.yaml's
+# proxy-dynamic sidecar) is what actually delivers the traffic onward.
 dnsInternalZones:
   - cluster.local
   - svc
@@ -89,30 +89,41 @@ server:
   peersSecretName: wireguard-peers
   serviceName: wireguard
 
-# name -> {port, target}. One sidecar container per entry (see
-# templates/deployment.yaml) — a peer dials this pod's tunnel address on
-# `port` and gets proxied to `target` (host:port, resolved by this pod's
-# normal cluster DNS at connection time, so no ClusterIP-stability question
-# to worry about). No Service/NetworkPolicy change needed per entry: this
-# traffic arrives already-decrypted over wg0 inside the pod's own netns,
-# never through the K8s Service that only fronts the outer WireGuard UDP
-# port (templates/service.yaml) — same path proxy-gateway used to reach its
-# own ports 80/443 before it was removed, validated live 2026-08-09.
+# Ports the proxy-dynamic sidecar (templates/deployment.yaml) listens on —
+# a peer dialing this pod's tunnel address on one of these gets proxied to
+# WHATEVER internal Service its own request names (plain-HTTP Host header
+# for httpPorts, TLS SNI for tlsPorts), resolved live via this cluster's
+# own CoreDNS at request time. No Service/NetworkPolicy change needed for
+# any of this: this traffic arrives already-decrypted over wg0 inside the
+# pod's own netns, never through the K8s Service that only fronts the outer
+# WireGuard UDP port (templates/service.yaml) — same path proxy-gateway
+# used to reach its own ports 80/443 before it was replaced, validated live
+# 2026-08-09.
 #
 # dnsInternalZones above makes DNS resolution generic (any internal name
-# resolves to this pod), but delivering the traffic still can't be: this
-# pod can't do kernel-level packet forwarding to an arbitrary destination
-# (net.ipv4.ip_forward is on Kapsule's unsafe-sysctls list, and Scaleway's
+# resolves to this pod), and this sidecar makes delivery generic too — a
+# genuinely new internal Service needs nothing added here, only a new PORT
+# if it doesn't already listen on one already covered below (this pod can't
+# do kernel-level packet forwarding to an arbitrary destination —
+# net.ipv4.ip_forward is on Kapsule's unsafe-sysctls list, and Scaleway's
 # kubelet_args API refuses to widen that allowlist for this cluster's k8s
-# version — confirmed live 2026-08-09, see README.md), so each reachable
-# target still needs its own userspace-proxy listener here. `port` must
-# match the target's own real port — that's what makes a peer's request to
-# the target's real hostname:port "just work" once DNS resolves the name
-# to this pod, no client-side reconfiguration needed.
-proxyTargets:
-  openbao:
-    port: 8200
-    target: "openbao.openbao.svc.cluster.local:8200"
+# version, confirmed live 2026-08-09, see README.md — so a TCP listener
+# still has to be bound per port ahead of time; that's the one thing that
+# can't be made fully dynamic).
+#
+# httpPorts covers OpenBao's plain-HTTP API (8200) and Grafana (80) today —
+# add a port here (not a target) the day some other internal service needs
+# a port neither already covers. tlsPorts (443) has no current consumer,
+# kept for symmetry/forward-compatibility with a future internal
+# TLS-native service; SNI carries no port, so it assumes the backend
+# listens on the same port number as the one dialed.
+dynamicProxy:
+  dnsResolver: coredns.kube-system.svc.cluster.local
+  httpPorts:
+    - 80
+    - 8200
+  tlsPorts:
+    - 443
 
 # This chart was the one exception that already had explicit per-container
 # resources missing entirely (not even a chart default: we own this
@@ -125,7 +136,11 @@ proxyTargets:
 # (2026-08-11): every container here runs `apk add --no-cache <pkg>` fresh
 # at startup (nothing's baked into the base alpine image), and that
 # package-fetch/install step spikes well above what the actual running
-# process needs afterwards.
+# process needs afterwards. proxy-dynamic uses the nginx:alpine image
+# directly (no apk install of its own) but runs a real master+worker
+# process pair instead of a single socat process, so it gets the same
+# tier proxyGateway (its closest predecessor, also a real daemon rather
+# than a thin relay) used to.
 resources:
   renderConf:
     requests:
@@ -141,13 +156,13 @@ resources:
     limits:
       cpu: 100m
       memory: 32Mi
-  proxy:
+  proxyDynamic:
     requests:
-      cpu: 5m
-      memory: 8Mi
+      cpu: 10m
+      memory: 32Mi
     limits:
-      cpu: 50m
-      memory: 64Mi
+      cpu: 100m
+      memory: 96Mi
   dns:
     requests:
       cpu: 5m

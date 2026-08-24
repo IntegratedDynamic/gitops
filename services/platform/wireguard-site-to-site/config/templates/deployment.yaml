@@ -98,26 +98,91 @@ spec:
           volumeMounts:
             - name: wg-confs
               mountPath: /config/wg_confs
-        # One sidecar per proxyTargets entry — each terminates the tunnel
-        # connection and re-originates a plain outbound TCP connection to
-        # its own target. Userspace proxying, not kernel routing, so no
-        # ip_forward/src_valid_mark, no iptables NAT, no capabilities
-        # beyond the wireguard container's own NET_ADMIN above (needed to
-        # create wg0 at all, unrelated to this). Each listens on every
-        # interface in this pod's netns, including wg0 once the tunnel is
-        # up — a peer with the right AllowedIPs dials this pod's tunnel
-        # address on that target's port directly.
-        {{- range $name, $proxyTarget := .Values.proxyTargets }}
-        - name: proxy-{{ $name }}
-          image: alpine:3.22
+        # Dynamic discovery-based reverse proxy: one nginx sidecar listening
+        # on a handful of well-known ports (dynamicProxy.httpPorts/tlsPorts)
+        # — instead of one static socat listener hardcoded per target
+        # (the earlier design, infrastructure#81's first pass), the actual
+        # backend is resolved live from what the client itself asked for:
+        # the plain-HTTP request's own Host header for httpPorts
+        # (`proxy_pass http://$http_host$request_uri` — nginx resolves
+        # $http_host as a variable via the `resolver` directive below, at
+        # request time, unlike a literal proxy_pass target which only
+        # resolves once at startup), or the TLS ClientHello's SNI name for
+        # tlsPorts (`stream` block, `ssl_preread on`, no certificate needed
+        # here since this is passthrough, not termination). Either way this
+        # container never sees the target's identity ahead of time — any
+        # internal Service on one of these ports becomes reachable the
+        # moment DNS resolves its name (dnsInternalZones below already
+        # makes that generic), nothing to add here when a new one shows up.
+        # No RBAC/K8s API access needed (unlike the old proxy-gateway sidecar
+        # this replaced 2026-08-24, which had to `kubectl get svc` to find
+        # its one static target) — `resolver` just points at this cluster's
+        # own CoreDNS Service, the same resolver every other pod already
+        # uses by default. Userspace proxying, not kernel routing, same
+        # reasoning as the design it replaces — see README.md's "Why the
+        # tunnel doesn't route to internal ClusterIPs directly".
+        #
+        # A listener still has to be bound ahead of time per PORT (a TCP
+        # socket can't cover every port at once) — that's the one thing
+        # still "listed" here, not a target hostname. TLS's SNI carries no
+        # port, so a tlsPorts entry assumes the backend listens on the same
+        # port number as the one dialed (true for the common case, e.g.
+        # some future internal service on 443); httpPorts has no such
+        # assumption since $http_host already carries the port the client
+        # actually dialed.
+        - name: proxy-dynamic
+          image: nginx:1.27-alpine
           command: ["sh", "-c"]
           args:
             - |
               set -eu
-              apk add --no-cache socat
-              exec socat TCP-LISTEN:{{ $proxyTarget.port }},fork,reuseaddr TCP:{{ $proxyTarget.target }}
-          resources: {{ $.Values.resources.proxy | toYaml | nindent 12 }}
-        {{- end }}
+              cat > /tmp/nginx.conf <<'NGINX_EOF'
+              worker_processes 1;
+              events { worker_connections 1024; }
+              http {
+                resolver {{ .Values.dynamicProxy.dnsResolver }} valid=10s;
+                # nginx's resolver does plain, literal DNS resolution -- no
+                # ndots/search-domain expansion the way a normal pod's own
+                # resolv.conf gives it for free. The tunnel's dnsmasq happily
+                # answers the short "<name>.<namespace>.svc" form (a suffix
+                # match, not a real lookup — see dnsInternalZones), but
+                # CoreDNS itself returns NXDOMAIN for that exact 3-label
+                # query (confirmed live 2026-08-24: `nslookup
+                # openbao.openbao.svc coredns...` -> NXDOMAIN, `nslookup
+                # openbao.openbao.svc.cluster.local` -> resolves fine) — so
+                # passing $http_host straight to proxy_pass 502'd for any
+                # peer using the short form Argo Workflows itself uses
+                # in-cluster. Normalize it here instead: only the bare short
+                # form (no dot after "svc", so this doesn't touch an
+                # already-qualified *.svc.cluster.local Host) gets
+                # "cluster.local" appended before proxying.
+                map $http_host $proxy_host {
+                  "~^(?<svcname>[^.]+\.[^.]+\.svc)(?<port>:\d+)?$"  $svcname.cluster.local$port;
+                  default                                            $http_host;
+                }
+                {{- range .Values.dynamicProxy.httpPorts }}
+                server {
+                  listen {{ . }};
+                  location / {
+                    proxy_pass http://$proxy_host$request_uri;
+                    proxy_set_header Host $http_host;
+                  }
+                }
+                {{- end }}
+              }
+              stream {
+                resolver {{ .Values.dynamicProxy.dnsResolver }} valid=10s;
+                {{- range .Values.dynamicProxy.tlsPorts }}
+                server {
+                  listen {{ . }};
+                  ssl_preread on;
+                  proxy_pass $ssl_preread_server_name:{{ . }};
+                }
+                {{- end }}
+              }
+              NGINX_EOF
+              exec nginx -c /tmp/nginx.conf -g 'daemon off;'
+          resources: {{ .Values.resources.proxyDynamic | toYaml | nindent 12 }}
         # Split DNS: answers every internal-cluster hostname (dnsInternalZones
         # — the "svc" and "cluster.local" suffixes, so this covers any
         # Service in any namespace generically, not one hostname per target)
@@ -129,8 +194,8 @@ spec:
         # /etc/hosts editing, and it reverts the moment the tunnel goes down
         # (scoped to the interface's own DNS config, not a standing file
         # edit). Resolving the name is only half the story — see
-        # proxyTargets above for why each name also needs its own listener
-        # here to actually deliver traffic.
+        # proxy-dynamic above for how traffic actually gets delivered once
+        # a peer's client has the tunnel's address.
         - name: dns
           image: alpine:3.22
           command: ["sh", "-c"]

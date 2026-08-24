@@ -16,7 +16,7 @@ data:
     ListenPort = {{ .Values.server.port }}
     PrivateKey = __PRIVATE_KEY__
     # No PostUp/PostDown NAT+forwarding rules on purpose (see deployment.yaml's
-    # proxyTargets sidecars) — this pod isn't a router for the wider cluster, it terminates the
+    # proxy-dynamic sidecar) — this pod isn't a router for the wider cluster, it terminates the
     # tunnel and re-originates plain outbound connections via userspace proxies.
     # That needs no net.ipv4.ip_forward/src_valid_mark: tried the kernel-routing
     # approach first, but Kapsule's kubelet doesn't allowlist either sysctl and
