@@ -247,8 +247,9 @@ envoy-gateway provisions once gateway-config's Gateway object exists
 (confirmed live 2026-08-12: crash-loops on an empty `kubectl get svc -l
 gateway.envoyproxy.io/owning-gateway-name=scaleway-gateway` otherwise).
 That sidecar was removed 2026-08-24 (infrastructure#81 — internal-cluster
-DNS + per-target `proxyTargets` sidecars replaced it, no Gateway API
-dependency at all) — wireguard-config no longer strictly needs this wave,
+DNS + a `proxy-dynamic` sidecar replaced it, resolving targets live via
+CoreDNS instead of listing them or the K8s API, no Gateway API dependency
+at all) — wireguard-config no longer strictly needs this wave,
 but stays here for now, same "rides along, no observed race" reasoning as
 external-dns.
 

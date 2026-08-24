@@ -85,11 +85,14 @@ terraformRoots:
     # vault-address is simply unused by this root's variables; harmless
     # empty, same reasoning as grafanaUrl below for openbao-managed.
     vaultAddress: ""
-    # Confirmed live: the public route (that root's version.tf default)
-    # times out reaching Grafana from inside the cluster -- a pod behind
-    # the cluster's own public ingress trying to reach it is a common
-    # hairpin-NAT gap. Matches services/platform/monitoring's Grafana
-    # Service (namespace monitoring, port 80).
+    # Matches services/platform/monitoring's Grafana Service (namespace
+    # monitoring, port 80) -- also that root's version.tf default now
+    # (infrastructure#81), so this is redundant with it, kept explicit for
+    # the same reason vaultAddress above is: the public route consistently
+    # times out reaching Grafana from inside the cluster (a pod behind the
+    # cluster's own public ingress trying to reach it is a common
+    # hairpin-NAT gap), and this CronWorkflow can't depend on that default
+    # ever changing back.
     grafanaUrl: http://grafana.monitoring.svc:80/
     # No required, no-default variables at all -- both its own vars have
     # defaults and everything else is a cross-root state read.
