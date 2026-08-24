@@ -45,7 +45,7 @@ spec:
         - name: root
           value: {{ .root | quote }}
         - name: workspace
-          value: {{ .workspace | quote }}
+          value: {{ include "terraform-apply.workspace" .root | quote }}
         - name: vault-address
           value: {{ .vaultAddress | quote }}
         - name: grafana-url

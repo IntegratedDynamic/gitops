@@ -85,7 +85,7 @@ spec:
             arguments:
               parameters:
                 - {name: root, value: {{ $bootstrap.root | quote }}}
-                - {name: workspace, value: {{ $bootstrap.workspace | quote }}}
+                - {name: workspace, value: {{ include "terraform-apply.workspace" $bootstrap.root | quote }}}
                 - {name: vault-address, value: {{ $bootstrap.vaultAddress | quote }}}
                 - {name: grafana-url, value: {{ $bootstrap.grafanaUrl | quote }}}
                 - {name: extra-secret-name, value: {{ $bootstrap.extraSecretName | quote }}}
@@ -96,7 +96,7 @@ spec:
             arguments:
               parameters:
                 - {name: root, value: {{ $managed.root | quote }}}
-                - {name: workspace, value: {{ $managed.workspace | quote }}}
+                - {name: workspace, value: {{ include "terraform-apply.workspace" $managed.root | quote }}}
                 - {name: vault-address, value: {{ $managed.vaultAddress | quote }}}
                 - {name: grafana-url, value: {{ $managed.grafanaUrl | quote }}}
                 - {name: extra-secret-name, value: {{ $managed.extraSecretName | quote }}}
