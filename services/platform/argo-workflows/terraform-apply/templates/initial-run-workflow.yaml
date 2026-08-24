@@ -89,6 +89,7 @@ spec:
                 - {name: vault-address, value: {{ $bootstrap.vaultAddress | quote }}}
                 - {name: grafana-url, value: {{ $bootstrap.grafanaUrl | quote }}}
                 - {name: extra-secret-name, value: {{ $bootstrap.extraSecretName | quote }}}
+                - {name: preflight-script, value: {{ $bootstrap.preflightScript | default "true" | quote }}}
           - name: managed
             depends: "bootstrap.Succeeded"
             templateRef: {name: terraform-apply, template: apply}
@@ -99,4 +100,5 @@ spec:
                 - {name: vault-address, value: {{ $managed.vaultAddress | quote }}}
                 - {name: grafana-url, value: {{ $managed.grafanaUrl | quote }}}
                 - {name: extra-secret-name, value: {{ $managed.extraSecretName | quote }}}
+                - {name: preflight-script, value: {{ $managed.preflightScript | default "true" | quote }}}
 {{- end }}

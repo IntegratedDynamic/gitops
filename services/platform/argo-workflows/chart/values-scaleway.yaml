@@ -100,6 +100,42 @@ argo-workflows:
         apiGroup: rbac.authorization.k8s.io
         kind: ClusterRole
         name: argo-workflows-admin
+    # The chart's own argo-workflows-admin ClusterRole (bound above) grants
+    # no secrets access at all -- fine for every UI action except one: the
+    # server's "Get artifact file" endpoint (what actually renders a
+    # completed/GC'd pod's logs in the UI, artifactRepository.archiveLogs)
+    # calls the K8s API *as the impersonated SSO ServiceAccount* to read
+    # the artifact repository's own credentials Secret at request time.
+    # Confirmed live 2026-08-24: every other write path (the workflow
+    # pod's own `wait` sidecar uploading to S3) mounts that same Secret via
+    # the kubelet (envFrom), which needs no RBAC at all -- only this
+    # server-side *live API read* does, and 403'd with "cannot get
+    # resource \"secrets\"" until this Role/RoleBinding existed. Scoped to
+    # exactly this one Secret by name, not a blanket secrets:get, to keep
+    # the SSO-admin ClusterRole's own "no secrets access" stance intact.
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: argo-workflows-artifact-repository-secret-reader
+        namespace: argo-workflows
+      rules:
+        - apiGroups: [""]
+          resources: ["secrets"]
+          resourceNames: ["argo-workflows-logs-scaleway-s3-credentials"]
+          verbs: ["get"]
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: argo-workflows-sso-admin-artifact-repository-secret-reader
+        namespace: argo-workflows
+      subjects:
+        - kind: ServiceAccount
+          name: argo-workflows-sso-admin
+          namespace: argo-workflows
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: argo-workflows-artifact-repository-secret-reader
 
   # Scoped to this one namespace instead of watching Workflows across the
   # whole cluster — the only Workflow that exists today
@@ -162,3 +198,33 @@ argo-workflows:
       limits:
         cpu: 200m
         memory: 256Mi
+
+  # Archives every Workflow pod's main-container logs to Scaleway Object
+  # Storage on completion, so `argo logs`/the UI's log tab still work after
+  # podGC removes the pod (OnWorkflowSuccess above, or Kubernetes' own node
+  # churn) — this repo's Loki stack already has these logs too, but the
+  # Argo-native tab is nicer for "did this CronWorkflow tick actually run
+  # terraform apply" spot-checks than switching to Grafana Explore.
+  # Dedicated bucket + identity (infra repo's 03-storage/scaleway,
+  # argo_workflows_logs entry) — same "one bucket, one identity, per
+  # consumer, never shared" contract as every other tool bucket there.
+  # useStaticCredentials defaults to true chart-wide (no IRSA on Scaleway),
+  # so accessKeySecret/secretKeySecret below are all that's needed.
+  artifactRepository:
+    archiveLogs: true
+    s3:
+      bucket: argo-workflows-logs-dev-id
+      endpoint: s3.fr-par.scw.cloud
+      region: fr-par
+      insecure: false
+      # Scaleway's S3-compatible endpoint needs path-style addressing, same
+      # requirement as every Terraform S3 backend in the infra repo
+      # (use_path_style = true, see that repo's CLAUDE.md) — virtual-hosted
+      # style (the SDK's default) 404s against Scaleway.
+      addressingStyle: path
+      accessKeySecret:
+        name: argo-workflows-logs-scaleway-s3-credentials
+        key: SCW_ACCESS_KEY
+      secretKeySecret:
+        name: argo-workflows-logs-scaleway-s3-credentials
+        key: SCW_SECRET_KEY

@@ -52,4 +52,9 @@ spec:
           value: {{ .grafanaUrl | quote }}
         - name: extra-secret-name
           value: {{ .extraSecretName | quote }}
+        # Most roots have nothing here (workflowtemplate.yaml's own
+        # per-parameter default, "true", is an instant no-op) -- only
+        # grafana-bootstrap/grafana-managed set a real preflightScript.
+        - name: preflight-script
+          value: {{ .preflightScript | default "true" | quote }}
 {{- end }}
