@@ -11,7 +11,7 @@ description: Standalone Grafana — split out of kube-prometheus-stack (2026-08-
   dependency list), so this split doesn't change Grafana's own behavior, only its
   Application/wave placement. Dashboards and the Prometheus datasource — previously
   free side effects of kube-prometheus-stack's *parent* chart, lost by this split — are
-  now Terraform-managed instead (infrastructure repo's 06-monitoring/grafana/managed).
+  now Terraform-managed instead (infrastructure repo's 12-monitoring/grafana/managed).
 type: application
 version: 0.1.0
 

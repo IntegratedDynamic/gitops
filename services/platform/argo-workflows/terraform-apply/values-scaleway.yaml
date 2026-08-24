@@ -57,14 +57,14 @@ resources:
 # than making every root plumb one.
 terraformRoots:
   - name: openbao-managed
-    root: 05-secrets/openbao/managed
-    workspace: 05-secrets-openbao-secrets
+    root: 11-secrets/openbao/managed
+    workspace: 11-secrets-openbao-managed-dev
     # 10 minutes before the OpenBao snapshot agent's own hourly schedule
     # (services/platform/openbao/chart/values-scaleway.yaml, snapshotAgent.
     # schedule: "0 * * * *") -- deliberate, so that schedule's backup
     # captures whatever this apply just changed.
     schedule: "50 * * * *"
-    # vault provider's in-cluster address (05-secrets/openbao/managed/
+    # vault provider's in-cluster address (11-secrets/openbao/managed/
     # version.tf's var.vault_address) -- matches services/platform/openbao/
     # init's baoAddr. The whole reason this root runs from in-cluster at
     # all is that OpenBao isn't reachable any other way for a while after
@@ -81,8 +81,8 @@ terraformRoots:
     extraSecretName: argo-workflows-openbao-managed-tfvars
 
   - name: grafana-bootstrap
-    root: 06-monitoring/grafana/bootstrap
-    workspace: 06-monitoring-grafana
+    root: 12-monitoring/grafana/bootstrap
+    workspace: 12-monitoring-grafana-bootstrap-dev
     schedule: "20 * * * *"
     # vault-address is simply unused by this root's variables; harmless
     # empty, same reasoning as grafanaUrl below for openbao-managed.
@@ -140,8 +140,8 @@ terraformRoots:
       fi
 
   - name: grafana-managed
-    root: 06-monitoring/grafana/managed
-    workspace: 06-monitoring-grafana
+    root: 12-monitoring/grafana/managed
+    workspace: 12-monitoring-grafana-managed-dev
     # 10 minutes after grafana-bootstrap: this root reads bootstrap's
     # service_account_token via data.terraform_remote_state -- running
     # after, not concurrently, avoids racing a token rotation.

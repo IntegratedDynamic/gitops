@@ -1,4 +1,4 @@
-# A self-hosted WireGuard tunnel so infra repo's 05-secrets/openbao's vault
+# A self-hosted WireGuard tunnel so infra repo's 11-secrets/openbao's vault
 # provider (local dev + CI) can reach OpenBao instead of the public gateway
 # route (openbao.scalepack.fr) — that route stays public for a different,
 # unrelated reason: OpenBao's own native OIDC/UI login for humans
@@ -47,7 +47,7 @@
 # /v1/auth/approle/login routes through proxy-gateway exactly like the UI
 # does; "no public listener" was already satisfied by both paths equally).
 # Removed 2026-08-10 to test consolidating everything onto proxy-gateway —
-# see infra repo's 05-secrets/openbao/{bootstrap,managed}/version.tf.
+# see infra repo's 11-secrets/openbao/{bootstrap,managed}/version.tf.
 namespace: wireguard
 
 # Soft "spread pods from this same sync-wave across nodes" pod label

@@ -215,7 +215,7 @@ spec:
             set -euo pipefail
             # jq: not in hashicorp/terraform's image, but required by every
             # root's data.external.scw_credentials (infra repo, e.g.
-            # 05-secrets/openbao/managed/main.tf) -- confirmed live, the
+            # 11-secrets/openbao/managed/main.tf) -- confirmed live, the
             # third test run got all the way to `terraform plan` and died
             # on "sh: jq: not found". Alpine-based image, apk has it.
             apk add --no-cache jq >/dev/null

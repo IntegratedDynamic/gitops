@@ -48,7 +48,7 @@ grafana:
   # grafana-sc-datasources' reload calls to Grafana's own API authenticated
   # this same way (disabling it 401'd them, confirmed live) — that specific
   # reason no longer applies post-split: dashboards/datasources are now
-  # Terraform-managed (infrastructure repo's 06-monitoring/grafana/managed,
+  # Terraform-managed (infrastructure repo's 12-monitoring/grafana/managed,
   # via the grafana provider's own bearer-token auth), and this chart doesn't
   # enable either sidecar. Left enabled anyway rather than changing auth
   # behavior as a side effect of this split — what actually keeps this from
@@ -68,7 +68,7 @@ grafana:
   # PVC-backed SQLite instead of the chart default (emptyDir) — without
   # this, every pod restart (not just a cluster rebuild) wipes
   # /var/lib/grafana, losing anything not re-created by
-  # 06-monitoring/grafana/managed's Terraform (unified alerting state,
+  # 12-monitoring/grafana/managed's Terraform (unified alerting state,
   # annotations, snapshots, ...). Grafana's own docs push HA/multi-replica
   # setups toward an external Postgres/MySQL instead of SQLite — doesn't
   # apply here (this is a single Grafana replica), so the proportionate
