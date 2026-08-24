@@ -1,38 +1,13 @@
-# Dedicated ServiceAccount (not "default") so the RBAC grant below is scoped
-# to exactly this pod, nothing else in the wireguard namespace.
+# Dedicated ServiceAccount (not "default") purely so no container in this
+# pod auto-mounts a token at all (automountServiceAccountToken: false in
+# deployment.yaml) — explicit, self-documenting "zero K8s API access" rather
+# than relying on the namespace's default SA's implicit behavior. Used to
+# also carry a Role/RoleBinding letting the (now-removed) proxy-gateway
+# sidecar discover Envoy Gateway's real Service name at startup —
+# infrastructure#81 dropped that sidecar along with the *.scalepack.fr DNS
+# trick it served, so no in-cluster API access is needed here anymore.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: wireguard
   namespace: {{ .Values.namespace }}
----
-# get/list on Services in envoy-gateway-system only — lets the
-# proxy-gateway sidecar (deployment.yaml) resolve Envoy Gateway's real
-# Service name at startup instead of hardcoding it. That name is
-# auto-generated per Gateway object (envoy-gateway-scaleway-gateway-<hash>)
-# and not guaranteed stable across a Gateway recreate — the same class of
-# problem wg_endpoint had, solved the same way: discover it live instead of
-# tracking one more hardcoded reference.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: wireguard-read-gateway-svc
-  namespace: envoy-gateway-system
-rules:
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get", "list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: wireguard-read-gateway-svc
-  namespace: envoy-gateway-system
-subjects:
-  - kind: ServiceAccount
-    name: wireguard
-    namespace: {{ .Values.namespace }}
-roleRef:
-  kind: Role
-  name: wireguard-read-gateway-svc
-  apiGroup: rbac.authorization.k8s.io
