@@ -58,7 +58,6 @@ resources:
 terraformRoots:
   - name: openbao-managed
     root: 11-secrets/openbao/managed
-    workspace: 11-secrets-openbao-managed-dev
     # 10 minutes before the OpenBao snapshot agent's own hourly schedule
     # (services/platform/openbao/chart/values-scaleway.yaml, snapshotAgent.
     # schedule: "0 * * * *") -- deliberate, so that schedule's backup
@@ -82,7 +81,6 @@ terraformRoots:
 
   - name: grafana-bootstrap
     root: 12-monitoring/grafana/bootstrap
-    workspace: 12-monitoring-grafana-bootstrap-dev
     schedule: "20 * * * *"
     # vault-address is simply unused by this root's variables; harmless
     # empty, same reasoning as grafanaUrl below for openbao-managed.
@@ -141,7 +139,6 @@ terraformRoots:
 
   - name: grafana-managed
     root: 12-monitoring/grafana/managed
-    workspace: 12-monitoring-grafana-managed-dev
     # 10 minutes after grafana-bootstrap: this root reads bootstrap's
     # service_account_token via data.terraform_remote_state -- running
     # after, not concurrently, avoids racing a token rotation.
