@@ -29,25 +29,14 @@
 # explicit least-privilege NetworkPolicy, on top of WireGuard's own
 # silent-drop-on-auth-failure behavior).
 #
-# OIDC-gated web UIs (Grafana, ArgoCD, ...) don't work through a per-app
-# proxyTargets entry: those apps generate their own redirect_uri from a
-# single hardcoded root_url, so a login started via a tunnel-specific
-# address (different host/port than that root_url) can never complete —
-# confirmed live 2026-08-09, Grafana's "Missing saved oauth state". Fixed
-# via templates/deployment.yaml's proxy-gateway sidecar (raw TCP passthrough
-# to Envoy Gateway's real Service, SNI/Host untouched — indistinguishable
-# from public traffic to every app behind it) plus the dns sidecar (split-DNS:
-# *.scalepack.fr resolves to this pod's tunnel address only while the tunnel
-# is up, pushed to peers via their wg-quick config's DNS setting).
-#
-# proxyTargets (below) started out also carrying a dedicated openbao:8200
-# entry for Terraform's vault provider, reasoned as "a machine credential
-# doesn't need Gateway/TLS in its path" — that reasoning didn't actually
-# hold up (OpenBao's HTTPRoute has no path restriction, so
-# /v1/auth/approle/login routes through proxy-gateway exactly like the UI
-# does; "no public listener" was already satisfied by both paths equally).
-# Removed 2026-08-10 to test consolidating everything onto proxy-gateway —
-# see infra repo's 11-secrets/openbao/{bootstrap,managed}/version.tf.
+# OIDC-gated web UIs (Grafana, ArgoCD, ...) were reachable over the tunnel
+# via a proxy-gateway sidecar (raw TCP passthrough to Envoy Gateway's real
+# Service) plus split-DNS resolving *.scalepack.fr to this pod's own tunnel
+# address. Removed 2026-08-24 (infrastructure#81): this domain exists for
+# machine credentials reaching OpenBao's API, not human OIDC/UI login (that
+# stays on the public route, untouched) — the DNS/proxy machinery below now
+# targets internal cluster DNS instead, which is what those credentials
+# actually need. Human UI access over the tunnel is a non-goal here.
 namespace: wireguard
 
 # Soft "spread pods from this same sync-wave across nodes" pod label
@@ -58,10 +47,19 @@ namespace: wireguard
 # scalewayApps entry (see this app's `syncWaveLabelPaths`).
 syncWave: "0"
 
-# The domain the dns sidecar answers for (see templates/deployment.yaml) —
-# every *.scalepack.fr hostname resolves to server.address while the
-# tunnel is up.
-dnsZone: scalepack.fr
+# Internal-cluster DNS suffixes the dns sidecar answers with this pod's own
+# tunnel address (server.address, see templates/deployment.yaml) instead of
+# forwarding upstream — covers every Service in the cluster generically
+# (Kubernetes' full *.<namespace>.svc.cluster.local FQDN form, matched via
+# the "cluster.local" suffix, and the shorter *.<namespace>.svc form Argo
+# Workflows already uses in-cluster, matched via the "svc" suffix) instead
+# of one hostname hardcoded per target. A peer resolving any such name gets
+# this pod's address; templates/deployment.yaml's proxyTargets sidecars are
+# what actually deliver the traffic onward (see that map below for why a
+# per-target listener is still needed even with generic DNS).
+dnsInternalZones:
+  - cluster.local
+  - svc
 
 server:
   port: 51820
@@ -91,14 +89,30 @@ server:
   peersSecretName: wireguard-peers
   serviceName: wireguard
 
-# name -> {port, target}. One sidecar container + Service port per entry
-# (see templates/deployment.yaml, templates/service.yaml) — a peer dials
-# this pod's tunnel address on `port` and gets proxied to `target`
-# (host:port, resolved by this pod's normal cluster DNS at connection time,
-# so no ClusterIP-stability question to worry about). Empty for now — see
-# the header comment above; add an entry back if something genuinely needs
-# a dedicated non-Gateway path.
-proxyTargets: {}
+# name -> {port, target}. One sidecar container per entry (see
+# templates/deployment.yaml) — a peer dials this pod's tunnel address on
+# `port` and gets proxied to `target` (host:port, resolved by this pod's
+# normal cluster DNS at connection time, so no ClusterIP-stability question
+# to worry about). No Service/NetworkPolicy change needed per entry: this
+# traffic arrives already-decrypted over wg0 inside the pod's own netns,
+# never through the K8s Service that only fronts the outer WireGuard UDP
+# port (templates/service.yaml) — same path proxy-gateway used to reach its
+# own ports 80/443 before it was removed, validated live 2026-08-09.
+#
+# dnsInternalZones above makes DNS resolution generic (any internal name
+# resolves to this pod), but delivering the traffic still can't be: this
+# pod can't do kernel-level packet forwarding to an arbitrary destination
+# (net.ipv4.ip_forward is on Kapsule's unsafe-sysctls list, and Scaleway's
+# kubelet_args API refuses to widen that allowlist for this cluster's k8s
+# version — confirmed live 2026-08-09, see README.md), so each reachable
+# target still needs its own userspace-proxy listener here. `port` must
+# match the target's own real port — that's what makes a peer's request to
+# the target's real hostname:port "just work" once DNS resolves the name
+# to this pod, no client-side reconfiguration needed.
+proxyTargets:
+  openbao:
+    port: 8200
+    target: "openbao.openbao.svc.cluster.local:8200"
 
 # This chart was the one exception that already had explicit per-container
 # resources missing entirely (not even a chart default: we own this
@@ -107,16 +121,11 @@ proxyTargets: {}
 # comment for the full incident. Every container here is a thin proxy/init
 # step, so these all stay small — except where noted below.
 #
-# dns and proxyGateway both got OOMKilled at their original 32Mi limit
-# during a live relaunch (2026-08-11): every container here runs `apk
-# add --no-cache <pkg>` fresh at startup (nothing's baked into the base
-# alpine image), and that package-fetch/install step spikes well above
-# what the actual running process needs afterwards — confirmed live for
-# proxyGateway specifically, observed at 31Mi against a 32Mi limit right
-# after startup. proxyGateway also gets its own tier instead of sharing
-# "proxy": it runs on alpine/kubectl (bundles the kubectl binary), a
-# heavier base image than the plain alpine the generic per-target proxy
-# sidecars use.
+# dns got OOMKilled at its original 32Mi limit during a live relaunch
+# (2026-08-11): every container here runs `apk add --no-cache <pkg>` fresh
+# at startup (nothing's baked into the base alpine image), and that
+# package-fetch/install step spikes well above what the actual running
+# process needs afterwards.
 resources:
   renderConf:
     requests:
@@ -139,13 +148,6 @@ resources:
     limits:
       cpu: 50m
       memory: 64Mi
-  proxyGateway:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 100m
-      memory: 96Mi
   dns:
     requests:
       cpu: 5m

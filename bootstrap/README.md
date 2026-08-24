@@ -232,18 +232,25 @@ live-broken manifest for this specific chart).
 
 ## Wave 6 — wireguard-config, dex-gateway, external-dns, terraform-apply
 
-All of these need wave 5's gateway-config to have actually finished
-reconciling — wireguard-config's proxy-gateway sidecar for the Service
+dex-gateway needs wave 5's gateway-config to have actually finished
+reconciling — it's HTTPRoute-only (its ExternalSecret moved to dex-secret,
+wave 1; the Dex server itself moved up to wave 1 too, 2026-08-20), so it
+needs the Gateway its HTTPRoute binds to. external-dns doesn't strictly
+need the Gateway itself (its own DNS-record reconciliation is
+soft/eventually-consistent, not a hard CRD-registration dependency like
+gateway-config's ClusterIssuer was) but rides along here rather than
+getting its own wave — no observed race.
+
+wireguard-config originally needed to wait here too, for the same reason
+dex-gateway does: its proxy-gateway sidecar discovered the Service
 envoy-gateway provisions once gateway-config's Gateway object exists
 (confirmed live 2026-08-12: crash-loops on an empty `kubectl get svc -l
 gateway.envoyproxy.io/owning-gateway-name=scaleway-gateway` otherwise).
-external-dns doesn't strictly need the Gateway itself (its own DNS-record
-reconciliation is soft/eventually-consistent, not a hard CRD-registration
-dependency like gateway-config's ClusterIssuer was) but rides along here
-rather than getting its own wave — no observed race. dex-gateway is
-HTTPRoute-only (its ExternalSecret moved to dex-secret, wave 1; the Dex
-server itself moved up to wave 1 too, 2026-08-20) — it alone still needs to
-wait here, for the Gateway its HTTPRoute binds to.
+That sidecar was removed 2026-08-24 (infrastructure#81 — internal-cluster
+DNS + per-target `proxyTargets` sidecars replaced it, no Gateway API
+dependency at all) — wireguard-config no longer strictly needs this wave,
+but stays here for now, same "rides along, no observed race" reasoning as
+external-dns.
 
 dex-gateway was renamed twice on 2026-08-13: first dex-init → dex-config
 (still imprecise — "config" doesn't say what it actually creates), then
@@ -264,9 +271,9 @@ naming precision, so these charts keep whatever wave their parent already
 had.
 
 wireguard-exit-config doesn't actually need to wait on gateway-config (no
-proxy-gateway sidecar, no dependency on the shared Gateway at all) — it
-would ride along in the same wave as its sibling anyway for simplicity if
-enabled; nothing forces it any earlier.
+dependency on the shared Gateway at all — same as wireguard-config now,
+above) — it would ride along in the same wave as its sibling anyway for
+simplicity if enabled; nothing forces it any earlier.
 
 terraform-apply: TEMPORARILY moved here from wave 2 (2026-08-20) —
 confirmed live that running it as early as wave 2 fires the

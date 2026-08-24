@@ -35,6 +35,7 @@ spec:
             - scalepack.fr/sync-wave
           labelSelector: {}
       serviceAccountName: wireguard
+      automountServiceAccountToken: false
       initContainers:
         # Combines the non-secret template (configmap.yaml) with the private
         # key from services/platform/wireguard-site-to-site/secret's Secret into the actual
@@ -117,42 +118,19 @@ spec:
               exec socat TCP-LISTEN:{{ $proxyTarget.port }},fork,reuseaddr TCP:{{ $proxyTarget.target }}
           resources: {{ $.Values.resources.proxy | toYaml | nindent 12 }}
         {{- end }}
-        # Raw TCP passthrough to Envoy Gateway's own real Service — SNI/Host
-        # travel untouched inside the TLS ClientHello, so Envoy does its
-        # normal SNI-based routing to whichever app (Grafana, ArgoCD, Dex,
-        # OpenBao's UI, ...) exactly as it does for public traffic. No
-        # per-app sidecar, no TLS termination here, and it covers every
-        # app behind the Gateway automatically — this is what makes OIDC
-        # logins (state cookie tied to the app's one real origin) work
-        # over the tunnel: from every app's point of view this traffic IS
-        # indistinguishable from the public path, just arriving over a
-        # different network. Service name is resolved at startup (RBAC in
-        # rbac.yaml) rather than hardcoded — Envoy Gateway generates it
-        # per-Gateway-object and it isn't guaranteed stable across a
-        # recreate.
-        - name: proxy-gateway
-          image: alpine/kubectl:1.35.3
-          command: ["sh", "-c"]
-          args:
-            - |
-              set -eu
-              apk add --no-cache socat
-              SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=scaleway-gateway -o jsonpath='{.items[0].metadata.name}')
-              TARGET="${SVC}.envoy-gateway-system.svc.cluster.local"
-              echo "proxying to Envoy Gateway Service: ${TARGET}"
-              socat TCP-LISTEN:443,fork,reuseaddr TCP:${TARGET}:443 &
-              socat TCP-LISTEN:80,fork,reuseaddr TCP:${TARGET}:80 &
-              wait
-          resources: {{ .Values.resources.proxyGateway | toYaml | nindent 12 }}
-        # Split DNS: answers *.scalepack.fr with this pod's own tunnel
-        # address (server.address, stripped of its CIDR suffix) and
-        # forwards everything else upstream. Peers get this pushed via
-        # their wg-quick config's DNS setting (infra repo's
-        # 04-vpn/wireguard-site-to-site/main.tf) — while the tunnel is up, every
-        # *.scalepack.fr hostname resolves to the tunnel automatically, no
-        # /etc/hosts editing, and it reverts the moment the tunnel goes
-        # down (scoped to the interface's own DNS config, not a standing
-        # file edit).
+        # Split DNS: answers every internal-cluster hostname (dnsInternalZones
+        # — the "svc" and "cluster.local" suffixes, so this covers any
+        # Service in any namespace generically, not one hostname per target)
+        # with this pod's own tunnel address (server.address, stripped of
+        # its CIDR suffix) and forwards everything else upstream. Peers get
+        # this pushed via their wg-quick config's DNS setting (infra repo's
+        # 04-vpn/wireguard-site-to-site/main.tf) — while the tunnel is up,
+        # any internal hostname resolves to the tunnel automatically, no
+        # /etc/hosts editing, and it reverts the moment the tunnel goes down
+        # (scoped to the interface's own DNS config, not a standing file
+        # edit). Resolving the name is only half the story — see
+        # proxyTargets above for why each name also needs its own listener
+        # here to actually deliver traffic.
         - name: dns
           image: alpine:3.22
           command: ["sh", "-c"]
@@ -161,7 +139,9 @@ spec:
               set -eu
               apk add --no-cache dnsmasq
               exec dnsmasq --no-daemon --no-resolv \
-                --address=/{{ .Values.dnsZone }}/{{ (splitList "/" .Values.server.address) | first }} \
+                {{- range .Values.dnsInternalZones }}
+                --address=/{{ . }}/{{ (splitList "/" $.Values.server.address) | first }} \
+                {{- end }}
                 --server=1.1.1.1 --server=8.8.8.8 \
                 --port=53
           resources: {{ .Values.resources.dns | toYaml | nindent 12 }}
