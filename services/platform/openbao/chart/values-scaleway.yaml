@@ -17,9 +17,9 @@ openbao:
     # the pool is down to 1 node.
     #
     # extraLabels' value here is a fallback default, not the source of
-    # truth — bootstrap/templates/scaleway.yaml injects this app's real
-    # `wave` from bootstrap/values.yaml via source.helm.parameters
-    # (see that app's `syncWaveLabelPaths` entry), overriding it. Set to
+    # truth — the infrastructure repo's platform-apps chart injects this
+    # app's real `wave` from values-secrets.yaml via source.helm.parameters
+    # (see that app's `syncWaveLabelPaths` entry, infra#84), overriding it. Set to
     # "-1" (not a real wave — waves start at 0) rather than a
     # plausible-looking number, so a standalone `helm template` run makes
     # the un-injected fallback obviously wrong instead of silently

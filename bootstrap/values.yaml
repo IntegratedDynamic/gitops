@@ -33,45 +33,30 @@ repoURL: https://github.com/IntegratedDynamic/gitops.git
 # history live in README.md instead. Read that before changing a wave
 # assignment that looks arbitrary but isn't.
 #
+# infra#84 (2026-08-24): OpenBao+ESO (former wave 0/1), monitoring minus
+# Grafana (former wave 2/3), and Velero (former wave 4) were extracted from
+# this list into the infrastructure repo's own
+# 10-cluster/scaleway/platform-apps/ chart -- three parallel-starting
+# Applications (secrets-apps/monitoring-apps/backups-apps) that must all
+# reach Healthy before THIS Application (bootstrap) is even created by
+# Terraform, replacing what used to be their own sync-waves here. See that
+# chart's README.md for the full design, and this file's README.md for
+# what changed on this side. Every remaining app below that still depends
+# on OpenBao/ESO or Velero being up (every *-secret chart, grafana's
+# restore hook) is unaffected in practice -- those prerequisites now finish
+# even earlier (before bootstrap starts at all) than they did as bootstrap's
+# own wave 0/1/4.
+#
 # Sorted by wave, ascending -- keep it that way.
 scalewayApps:
-  # ── wave 0 ────────────────────────────────────────────────────────────
-  # openbao + openbao-init share a wave (not split, despite openbao-init
-  # depending on openbao's pod being up) because ArgoCD's real Application
-  # health check creates a deadlock otherwise: openbao's own health never
-  # goes Healthy until openbao-init's restore Job has succeeded, so a
-  # later wave for openbao-init could never even start. Same "brief
-  # intra-wave race, self-heals" tradeoff this whole file accepts
-  # elsewhere -- openbao-init's restore script just retries until OpenBao
-  # is reachable.
-  - {name: openbao, namespace: openbao, chartPath: services/platform/openbao/chart, valueFile: values-scaleway.yaml, wave: "0", syncWaveLabelPaths: ['openbao.server.extraLabels.scalepack\.fr/sync-wave']}
-  # openbao-init's own credentials (S3 access for the restore) are
-  # Terraform-managed (10-cluster/scaleway), not ESO-managed -- it's what
-  # bootstraps ESO/OpenBao usable for everything else, so it can't depend
-  # on the mechanism it exists to unlock.
-  - {name: openbao-init, namespace: openbao, chartPath: services/platform/openbao/init, valueFile: values-scaleway.yaml, wave: "0"}
-
   # ── wave 1 ────────────────────────────────────────────────────────────
-  # external-secrets + secrets-sync (the ClusterSecretStore) share this
-  # wave, and every product's own ExternalSecret-only <product>/secret
-  # chart lives here too -- the earliest wave that can hold them, to
-  # maximize ESO's head start before each product's own later wave needs
-  # to mount its Secret. (Two narrower approaches -- splitting eso/
-  # secrets-sync into separate waves, then a dedicated verify-Job gating
-  # just one consumer -- were tried and dropped first; see git history if
-  # the detail is ever needed.) Where a chart mixed an ExternalSecret with
-  # something else, the ExternalSecret was split into its own
-  # <product>/secret chart so it could move here, leaving the rest of that
-  # chart in its own later wave.
-  - {name: external-secrets, namespace: external-secrets, chartPath: services/platform/external-secrets/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['external-secrets.podLabels.scalepack\.fr/sync-wave', 'external-secrets.webhook.podLabels.scalepack\.fr/sync-wave', 'external-secrets.certController.podLabels.scalepack\.fr/sync-wave']}
-  - {name: secrets-sync, namespace: secrets-sync, chartPath: services/platform/secrets-sync/config, valueFile: values-scaleway.yaml, wave: "1"}
-  # dex: moved up from wave 6 -- it has no dependency beyond its own
-  # dex-secret (this wave); only its public exposure (dex-gateway, wave 6)
-  # needs the Gateway. Confirmed live: eager-OIDC-discovery consumers like
-  # argo-server crash-loop if Dex isn't already reachable at their own
-  # startup, unlike Grafana/ArgoCD's lazy OIDC dial on first login.
+  # dex: no dependency beyond the infra repo's secrets-apps domain (OpenBao
+  # + ESO, now extracted -- see the infra#84 note above); only its public
+  # exposure (dex-gateway, wave 6) needs the Gateway. Confirmed live:
+  # eager-OIDC-discovery consumers like argo-server crash-loop if Dex isn't
+  # already reachable at their own startup, unlike Grafana/ArgoCD's lazy
+  # OIDC dial on first login.
   - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
-  - {name: velero-secret, namespace: velero, chartPath: services/platform/velero/secret, valueFile: values.yaml, wave: "1"}
   - {name: cert-manager-webhook-secret, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-secret, valueFile: values.yaml, wave: "1"}
   - {name: wireguard-secret, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/secret, valueFile: values-scaleway.yaml, wave: "1"}
   # wireguard-exit-secret: same shape, for the separate exit-node
@@ -81,65 +66,32 @@ scalewayApps:
   - {name: dex-secret, namespace: gateway, chartPath: services/platform/dex/secret, valueFile: values.yaml, wave: "1"}
   - {name: external-dns-secret, namespace: external-dns, chartPath: services/platform/external-dns/secret, valueFile: values.yaml, wave: "1"}
   - {name: grafana-secret, namespace: monitoring, chartPath: services/platform/monitoring/grafana-secret, valueFile: values.yaml, wave: "1"}
-  # thanos-secret / loki-secret / tempo-secret: the Scaleway Object
-  # Storage credentials monitoring/chart, loki-chart, tempo-chart (wave 3)
-  # each consume -- see gitops#29.
-  - {name: thanos-secret, namespace: monitoring, chartPath: services/platform/monitoring/thanos-secret, valueFile: values.yaml, wave: "1"}
-  - {name: loki-secret, namespace: monitoring, chartPath: services/platform/monitoring/loki-secret, valueFile: values.yaml, wave: "1"}
-  - {name: tempo-secret, namespace: monitoring, chartPath: services/platform/monitoring/tempo-secret, valueFile: values.yaml, wave: "1"}
   # argo-workflows-secret: the Secrets every terraform-apply CronWorkflow
   # pod mounts (Scaleway state-bucket credentials, plus a few tfvars only
   # one root needs -- see services/platform/argo-workflows/secret/values.yaml).
   - {name: argo-workflows-secret, namespace: argo-workflows, chartPath: services/platform/argo-workflows/secret, valueFile: values.yaml, wave: "1"}
 
   # ── wave 2 ────────────────────────────────────────────────────────────
-  # argo-workflows: the workflow-controller + server. Has to sync after
-  # wave 1's dex (its SSO dials Dex in-cluster at server startup), so it
-  # can't share dex's wave.
+  # argo-workflows: the workflow-controller AND server (`server.enabled`) --
+  # the server's SSO now dials Dex in-cluster, so this has to sync after
+  # wave 1's dex, not share a wave with it.
   - {name: argo-workflows, namespace: argo-workflows, chartPath: services/platform/argo-workflows/chart, valueFile: values-scaleway.yaml, wave: "2", syncWaveLabelPaths: ['argo-workflows.controller.podLabels.scalepack\.fr/sync-wave']}
-  # kube-prometheus-stack-crds: a separate, earlier-wave Application
-  # purely so ArgoCD's CRD-Established health check gates
-  # kube-prometheus-stack (wave 3, skipCrds: true) from starting before
-  # these are truly ready. Confirmed live: prometheus-operator checks CRD
-  # availability once at pod startup with no retry -- ArgoCD calling the
-  # CRDs "Synced" isn't the same moment as the API server finishing
-  # establishment, and the gap once left a Prometheus CR stuck with an
-  # empty status, no operator log, no StatefulSet, fixable only by a
-  # manual operator restart.
-  - {name: kube-prometheus-stack-crds, namespace: monitoring, chartPath: services/platform/monitoring/crds, valueFile: values-scaleway.yaml, wave: "2"}
-
-  # ── wave 3 ────────────────────────────────────────────────────────────
-  # kube-prometheus-stack + loki/tempo: real prerequisites are wave 2's
-  # CRDs and wave 1's secrets, nothing cert-manager/gateway/dex-related --
-  # see gitops#29. Grafana itself moved out to its own `grafana` Application
-  # (wave 5) since its restore hook needs the `velero` namespace to exist
-  # first, which this wave predates. (grafana-config, which used to sit
-  # here too, removed 2026-08-22 -- it was only ever its TEMPORARY
-  # letsencrypt-staging CA bundle ConfigMap, dead weight now that
-  # gateway-config is back on letsencrypt-prod.)
-  - {name: kube-prometheus-stack, namespace: monitoring, chartPath: services/platform/monitoring/chart, valueFile: values-scaleway.yaml, wave: "3", skipCrds: true, syncWaveLabelPaths: ['kube-prometheus-stack.prometheus.prometheusSpec.podMetadata.labels.scalepack\.fr/sync-wave', 'kube-prometheus-stack.prometheusOperator.podLabels.scalepack\.fr/sync-wave']}
-  - {name: loki, namespace: monitoring, chartPath: services/platform/monitoring/loki-chart, valueFile: values-scaleway.yaml, wave: "3"}
-  - {name: tempo, namespace: monitoring, chartPath: services/platform/monitoring/tempo-chart, valueFile: values-scaleway.yaml, wave: "3"}
 
   # ── wave 4 ────────────────────────────────────────────────────────────
-  # velero + envoy-gateway + cert-manager (+ its Scaleway DNS01 webhook):
-  # none of these three depend on each other -- what actually needs all
-  # three is gateway-config (wave 5): velero for its cert-restore hook,
-  # envoy-gateway for the Gateway API CRDs, cert-manager for the
-  # cert-manager.io CRDs its ClusterIssuers need. cert-manager and
-  # envoy-gateway only race each other softly (cert-manager's pod-level
-  # "Gateway API CRDs not present" crash self-heals via kubelet retry, not
-  # a hard API-level failure), so sharing a wave is fine.
-  - {name: velero, namespace: velero, chartPath: services/platform/velero/chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['velero.podLabels.scalepack\.fr/sync-wave']}
+  # envoy-gateway + cert-manager (+ its Scaleway DNS01 ACME webhook): don't
+  # depend on each other at all -- what actually needs both is
+  # gateway-config (wave 5): envoy-gateway for the Gateway API CRDs,
+  # cert-manager for the cert-manager.io CRDs its ClusterIssuers need. Kept
+  # at wave 4 (not renumbered down) even though velero/alloy/otel-collector
+  # moved out (infra#84 note above) -- gaps are cheap, no reason to shift
+  # every later wave's number for this.
   - {name: envoy-gateway, namespace: envoy-gateway-system, chartPath: services/platform/gateway/chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['gateway-helm.deployment.pod.labels.scalepack\.fr/sync-wave']}
   - {name: cert-manager, namespace: cert-manager, chartPath: services/platform/cert-manager/chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['cert-manager.podLabels.scalepack\.fr/sync-wave', 'cert-manager.webhook.podLabels.scalepack\.fr/sync-wave', 'cert-manager.cainjector.podLabels.scalepack\.fr/sync-wave']}
   - {name: cert-manager-webhook-scaleway, namespace: cert-manager, chartPath: services/platform/cert-manager/webhook-chart, valueFile: values-scaleway.yaml, wave: "4", syncWaveLabelPaths: ['scaleway-certmanager-webhook.podLabels.scalepack\.fr/sync-wave']}
-  # alloy / otel-collector: one wave after loki/tempo -- both need the
-  # loki/tempo Services resolvable, not just created. See gitops#29.
-  - {name: alloy, namespace: monitoring, chartPath: services/platform/monitoring/alloy-chart, valueFile: values-scaleway.yaml, wave: "4"}
-  - {name: otel-collector, namespace: monitoring, chartPath: services/platform/otel-collector/chart, valueFile: values-scaleway.yaml, wave: "4"}
-  # argocd-config-monitoring: a PrometheusRule, needs wave 2's CRDs
-  # Established -- shares this wave, no interdependency with the rest.
+  # argocd-config-monitoring: a PrometheusRule, needs the infra repo's
+  # monitoring-apps domain's kube-prometheus-stack-crds Established --
+  # guaranteed true well before this wave, since that domain now finishes
+  # before bootstrap even starts (infra#84 note above).
   - {name: argocd-config-monitoring, namespace: argocd, chartPath: services/platform/argocd-config/monitoring, valueFile: values.yaml, wave: "4"}
 
   # ── wave 5 ────────────────────────────────────────────────────────────
@@ -152,9 +104,10 @@ scalewayApps:
   # pod-level race this file otherwise tolerates) -- so it can't share
   # wave 4 with the CRDs it depends on.
   - {name: gateway-config, namespace: gateway, chartPath: services/platform/gateway/config, valueFile: values-scaleway.yaml, wave: "5"}
-  # grafana joins here for a narrower reason -- it only needs wave 4's
-  # velero (its grafana-restore-* PreSync hook needs the `velero`
-  # namespace/CRDs to exist), not envoy-gateway/cert-manager at all.
+  # grafana joins here for a narrower reason -- it only needs the infra
+  # repo's backups-apps domain's velero (its grafana-restore-* PreSync hook
+  # needs the `velero` namespace/CRDs to exist) -- guaranteed true well
+  # before this wave, same reasoning as argocd-config-monitoring above.
   # No syncWaveLabelPaths (unlike its siblings): grafana-chart hardcodes
   # its wave label directly -- the inject-via-Helm-parameter mechanism
   # every other app here uses produced a live-broken manifest for this
@@ -176,18 +129,17 @@ scalewayApps:
   # terraform-apply: wave placement is a real dependency (grafana-managed
   # can't succeed before grafana-bootstrap has minted a fresh token
   # against the rebuilt Grafana, wave 5) -- proper per-root dependency/
-  # health gating (e.g. openbao-managed only actually needs OpenBao, wave
-  # 0) is follow-up work, not done here. As of infra#75, this chart's own
-  # PostSync hook (templates/initial-run-workflow.yaml) submits
-  # grafana-bootstrap then grafana-managed immediately once this wave
-  # syncs, instead of leaving them to wait out their next hourly
-  # CronWorkflow trigger (confirmed live: that gap left Grafana's
-  # Terraform-managed config unrecovered for up to ~50 minutes post-rebuild).
+  # health gating (e.g. openbao-managed only actually needs OpenBao, now
+  # the infra repo's secrets-apps domain) is follow-up work, not done here.
+  # This chart's own PostSync hook (templates/initial-run-workflow.yaml)
+  # submits grafana-bootstrap then grafana-managed immediately once this
+  # wave syncs, instead of leaving them to wait out their next hourly
+  # CronWorkflow trigger.
   - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "6"}
 
   # ── wave 7 ────────────────────────────────────────────────────────────
-  # every *-gateway chart left: same dependency (the shared Gateway from
-  # wave 5 + Dex from wave 6), no ordering between them.
+  # every remaining *-gateway chart: same dependency (the shared Gateway
+  # from wave 5 + Dex from wave 6), no ordering between them.
   - {name: grafana-gateway, namespace: monitoring, chartPath: services/platform/monitoring/grafana-gateway, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "7"}
   - {name: argocd-config-gateway, namespace: argocd, chartPath: services/platform/argocd-config/gateway, valueFile: values-scaleway.yaml, wave: "7"}

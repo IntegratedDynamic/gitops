@@ -1,11 +1,11 @@
 apiVersion: v2
 name: velero
-description: Wrapper chart pulling in vendor Velero, so this deployment can go
-  as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list)
-  instead of the old, uncoordinated services-vendor-scaleway/services-app-scaleway split — see
-  bootstrap/templates/scaleway.yaml. Needed because this chart consumes
-  velero-scaleway-credentials, materialized by services/platform/velero/secret
-  (a sibling app in that same graph) from OpenBao.
+description: Wrapper chart pulling in vendor Velero, managed as an Application by
+  the infrastructure repo's 10-cluster/scaleway/platform-apps/values-backups.yaml
+  (infra#84 — extracted from this repo's own bootstrap/values.yaml, see that
+  file's own note). Consumes velero-scaleway-credentials, written directly by
+  that repo's 10-cluster/scaleway/main.tf (kubernetes_secret.velero_scaleway_credentials)
+  instead of ESO/OpenBao — see infra repo's platform-apps/README.md.
 type: application
 version: 0.1.0
 

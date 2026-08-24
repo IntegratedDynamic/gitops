@@ -1,9 +1,10 @@
 apiVersion: v2
 name: otel-collector
 description: Wrapper chart pulling in the vendor OpenTelemetry Collector (Deployment/gateway
-  mode, contrib distribution), so this deployment goes as a plain Application managed
-  directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps
-  list). This is the OTLP ingestion point for applications that push their own telemetry
+  mode, contrib distribution), managed as an Application by the infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-monitoring.yaml (infra#84 —
+  extracted from this repo's own bootstrap/values.yaml, see that file's own
+  note). This is the OTLP ingestion point for applications that push their own telemetry
   via an OTel SDK — a different, complementary path from Alloy
   (services/platform/monitoring/alloy-chart), which owns node-level container-log
   scraping. Fans out — logs to Loki, metrics to a scrape endpoint for Prometheus, traces

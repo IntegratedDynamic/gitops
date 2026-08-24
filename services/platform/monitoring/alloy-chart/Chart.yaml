@@ -1,9 +1,10 @@
 apiVersion: v2
 name: alloy
 description: Wrapper chart pulling in vendor Grafana Alloy (DaemonSet mode — the chart
-  default), so this deployment goes as a plain Application managed directly by
-  bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list).
-  Ships every node's container logs to Loki (services/platform/monitoring/loki-chart)
+  default), managed as an Application by the infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-monitoring.yaml (infra#84 —
+  extracted from this repo's own bootstrap/values.yaml, see that file's own
+  note). Ships every node's container logs to Loki (services/platform/monitoring/loki-chart)
   via loki.source.kubernetes — the Kubernetes-API-based log tail, not a hostPath mount,
   so no privileged securityContext or /var/log access is needed.
 type: application
