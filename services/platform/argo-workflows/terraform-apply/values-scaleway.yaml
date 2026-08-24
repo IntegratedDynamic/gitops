@@ -96,6 +96,48 @@ terraformRoots:
     # No required, no-default variables at all -- both its own vars have
     # defaults and everything else is a cross-root state read.
     extraSecretName: argo-workflows-grafana-bootstrap-extra
+    # Self-heal for a failure mode Terraform's own drift detection can't
+    # see (infra#82): grafana_service_account_token.terraform can go dead
+    # (Grafana rejects it with "invalid API key") while still existing and
+    # showing not-expired/not-revoked in Grafana's own metadata -- a
+    # cluster rebuild that restores Grafana's PVC from an older Velero
+    # snapshot did exactly this 2026-08-23. `terraform apply` alone can
+    # never notice: the provider has no way to read a token's secret value
+    # back to compare it, only whether the resource still exists. So this
+    # actually calls the token (same request the real apply would make
+    # indirectly, e.g. reading dashboards) before the real apply runs, and
+    # forces a `-replace` if Grafana rejects it -- confirmed live, a
+    # freshly-created token on the same service account authenticates fine
+    # immediately after, so recreation is the only real fix, there's
+    # nothing to "repair" about the old one.
+    preflightScript: |
+      set -euo pipefail
+      # Fails loudly instead of quietly no-op'ing against an empty
+      # workingDir -- confirmed live this can actually happen (an
+      # artifact-wiring regression once put an empty directory here, and
+      # `terraform init` doesn't itself error on that, it just prints
+      # "initialized in an empty directory" and exits 0).
+      test -f version.tf || { echo "no version.tf in $(pwd) -- workspace artifact didn't land, aborting" >&2; exit 1; }
+      apk add --no-cache curl >/dev/null
+      terraform init -input=false \
+        -backend-config="access_key=${SCW_ACCESS_KEY}" \
+        -backend-config="secret_key=${SCW_SECRET_KEY}"
+      TOKEN=$(terraform output -raw service_account_token 2>/dev/null || true)
+      if [ -z "${TOKEN:-}" ]; then
+        echo "no terraform service-account token in state yet -- nothing to preflight"
+        exit 0
+      fi
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+        "${TF_VAR_grafana_url}api/serviceaccounts/search" \
+        -H "Authorization: Bearer ${TOKEN}")
+      if [ "$STATUS" = "401" ]; then
+        echo "terraform's own Grafana token no longer authenticates (401) -- forcing recreation"
+        terraform apply -auto-approve -input=false \
+          -replace=grafana_service_account_token.terraform \
+          -var-file="env/${TF_WORKSPACE}.tfvars"
+      else
+        echo "token still authenticates (status ${STATUS}) -- nothing to do"
+      fi
 
   - name: grafana-managed
     root: 06-monitoring/grafana/managed
@@ -107,3 +149,60 @@ terraformRoots:
     vaultAddress: ""
     grafanaUrl: http://grafana.monitoring.svc:80/
     extraSecretName: argo-workflows-grafana-managed-extra
+    # Self-heal for the other half of infra#82: grafana_data_source.{prometheus,
+    # loki,tempo} can exist live under a DIFFERENT uid than the one in
+    # state (same Velero-restore-vs-live-provisioning mismatch as the
+    # token above, first hit 2026-08-23) -- `terraform apply` then tries a
+    # plain POST /datasources for a name that already exists and dies with
+    # a 409, since Terraform has no "adopt if already there" behavior
+    # (import is a one-time, explicit CLI action, never automatic). This
+    # re-syncs state to whatever uid Grafana actually serves for each
+    # named datasource before the real apply runs. `apply -refresh-only`
+    # first: data.terraform_remote_state.grafana_bootstrap is re-read on
+    # every plan/apply, but only *persisted* to state (where `terraform
+    # output` reads from) by an apply -- without it this would read
+    # whatever token was current as of the *last* real apply, not
+    # necessarily the one grafana-bootstrap's own preflight just rotated
+    # 10 minutes earlier.
+    preflightScript: |
+      set -euo pipefail
+      # See grafana-bootstrap's own preflightScript comment above -- same
+      # guard against a silently-empty workingDir.
+      test -f version.tf || { echo "no version.tf in $(pwd) -- workspace artifact didn't land, aborting" >&2; exit 1; }
+      apk add --no-cache jq curl >/dev/null
+      terraform init -input=false \
+        -backend-config="access_key=${SCW_ACCESS_KEY}" \
+        -backend-config="secret_key=${SCW_SECRET_KEY}"
+      terraform apply -refresh-only -auto-approve -input=false \
+        -var-file="env/${TF_WORKSPACE}.tfvars"
+      TOKEN=$(terraform state pull | jq -r '
+        .resources[]
+        | select(.type == "terraform_remote_state" and .name == "grafana_bootstrap")
+        | .instances[0].attributes.outputs.value.service_account_token
+      ')
+      GRAFANA_URL="${TF_VAR_grafana_url%/}"
+      for pair in grafana_data_source.prometheus:Prometheus \
+                  grafana_data_source.loki:Loki \
+                  grafana_data_source.tempo:Tempo; do
+        addr="${pair%%:*}"
+        name="${pair##*:}"
+        live_uid=$(curl -s -H "Authorization: Bearer ${TOKEN}" \
+          "${GRAFANA_URL}/api/datasources/name/${name}" | jq -r '.uid // empty')
+        if [ -z "$live_uid" ]; then
+          echo "${name}: not live yet -- plain create will handle it"
+          continue
+        fi
+        state_uid=$(terraform state pull | jq -r --arg addr "$addr" '
+          .resources[]
+          | select((.type + "." + .name) == $addr)
+          | .instances[0].attributes.uid // empty
+        ')
+        if [ "$state_uid" != "$live_uid" ]; then
+          echo "${name}: state uid (${state_uid:-none}) != live uid (${live_uid}) -- re-importing"
+          terraform state rm "$addr" >/dev/null 2>&1 || true
+          terraform import -input=false -var-file="env/${TF_WORKSPACE}.tfvars" \
+            "$addr" "1:${live_uid}"
+        else
+          echo "${name}: uid matches -- nothing to do"
+        fi
+      done
