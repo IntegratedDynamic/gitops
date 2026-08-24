@@ -6,14 +6,15 @@ gateway-helm:
   deployment:
     pod:
       # Soft "spread pods from this same sync-wave across nodes" (shared
-      # with cert-manager, not gateway-config — see bootstrap/values.yaml's
-      # wave 4/5 comments for why gateway-config alone needs its own later
-      # wave while cert-manager can safely bundle here) — see
+      # with cert-manager, not gateway-config — see the infra repo's
+      # values-networking.yaml wave 1/2 comments for why gateway-config
+      # alone needs its own later wave while cert-manager can safely bundle
+      # here) — see
       # services/platform/cert-manager/chart/values-scaleway.yaml's
       # comment on the same fix. labels' value is a fallback default, not
-      # the source of truth — bootstrap/templates/scaleway.yaml injects
+      # the source of truth — the infrastructure repo's platform-apps chart injects
       # this app's real `wave` here (see this app's `syncWaveLabelPaths`
-      # entry in bootstrap/values.yaml). Set to "-1" (not a real wave)
+      # entry in values-networking.yaml, infra#84). Set to "-1" (not a real wave)
       # rather than a plausible-looking number, so a standalone render
       # makes the un-injected fallback obvious instead of silently
       # matching production.

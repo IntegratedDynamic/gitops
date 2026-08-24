@@ -24,9 +24,9 @@ scaleway-certmanager-webhook:
   # Soft "spread pods from this same sync-wave across nodes" — see
   # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
   # the same fix. podLabels' value is a fallback default, not the source
-  # of truth — bootstrap/templates/scaleway.yaml injects this app's real
+  # of truth — the infrastructure repo's platform-apps chart injects this app's real
   # `wave` here (see this app's `syncWaveLabelPaths` entry in
-  # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+  # values-networking.yaml, infra#84). Set to "-1" (not a real wave) rather than a
   # plausible-looking number, so a standalone render makes the
   # un-injected fallback obvious instead of silently matching production.
   podLabels:
