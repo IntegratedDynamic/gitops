@@ -8,6 +8,36 @@ wave assignment, and renaming history. Read it when the short version in
 `values.yaml` isn't enough, or before changing a wave assignment that looks
 arbitrary but isn't.
 
+**infra#84 (2026-08-24):** OpenBao+ESO (former waves 0-1), monitoring minus
+Grafana (former waves 2-3: kube-prometheus-stack-crds, kube-prometheus-stack,
+loki, tempo, alloy, otel-collector), and Velero (former wave 4) were
+extracted out of this chart entirely into the infrastructure repo's own
+`10-cluster/scaleway/platform-apps/` chart — three Applications
+(`secrets-apps`/`monitoring-apps`/`backups-apps`) created directly by that
+repo's `argocd.tf`, started in parallel with each other, and required to
+reach Healthy before Terraform even creates `bootstrap`'s own Application
+resource (see that chart's own README.md for the full mechanism — plain
+ArgoCD sync-wave can't express ordering across independent top-level
+Applications, only within one parent's own sync, which is exactly why this
+extraction needed a Terraform-side gate instead of just another wave
+number). The wave sections below for those apps are kept for their
+still-relevant intra-domain reasoning (now applying inside the infra repo's
+`platform-apps` chart instead of here) — each is marked with where it
+moved. Every wave that's still live in `values.yaml` today is unaffected by
+this move; their own prerequisites (OpenBao/ESO, Velero) now finish even
+earlier (before `bootstrap` starts at all) than they did as this chart's own
+wave 0/1/4.
+
+`thanos-secret`/`loki-secret`/`tempo-secret`/`velero/secret` (the
+ExternalSecret-only charts wave 1 used to hold for these four) were deleted
+outright, not moved — the credentials they materialized are now written
+directly as Kubernetes Secrets by the infrastructure repo's
+`10-cluster/scaleway/main.tf`, since Terraform already originates all four
+(`03-storage/scaleway`'s workload identities) and OpenBao/ESO added a hop
+with nothing to gain. OpenBao still gets the same values independently
+(`11-secrets/openbao/managed`'s `vault_kv_secret_v2` writes, unchanged) —
+see infra repo's `platform-apps/README.md` for the full reasoning.
+
 ## Why sync-wave on one Application's own resources, not an ApplicationSet
 
 Every scaleway Application is rendered directly as a managed resource of
@@ -28,6 +58,11 @@ services-vendor-scaleway used successfully for cert-manager (-1) vs openbao
 (0) before this list replaced it.
 
 ## Wave 0 — openbao + openbao-init
+
+**Moved to the infra repo's `platform-apps/values-secrets.yaml` wave 0
+(infra#84, 2026-08-24)** — this app no longer lives in this repo's
+`bootstrap` at all. Reasoning below still applies verbatim, just in that
+file now.
 
 These were split into waves 0/1 for most of this file's history, on the
 reasonable-looking assumption that openbao-init's restore Job needs
@@ -61,6 +96,18 @@ that chart's own comment) — a file-location accident from early iteration,
 not evidence this chart was ever meant to be coupled to ESO's mechanics.
 
 ## Wave 1 — external-secrets, secrets-sync, and every product's `*-secret`
+
+**`external-secrets`/`secrets-sync` moved to the infra repo's
+`platform-apps/values-secrets.yaml` wave 1 (infra#84, 2026-08-24)** — the
+reasoning below for why they run one wave after OpenBao still applies
+verbatim, just in that file now. Every product's own `*-secret` chart
+(dex-secret, external-dns-secret, grafana-secret, wireguard-secret,
+cert-manager-webhook-secret, argo-workflows-secret) stays right here,
+unaffected — those still need ESO/OpenBao, which is now guaranteed Healthy
+even earlier than before (finishes ahead of `bootstrap` starting at all,
+not just ahead of this wave). `thanos-secret`/`loki-secret`/`tempo-secret`/
+`velero/secret` were deleted outright, not moved — see this file's top
+note.
 
 Two earlier designs were tried and dropped here, in order:
 
@@ -103,6 +150,11 @@ a CronWorkflow CR — a hard, non-self-healing dependency at the API level,
 same class as kube-prometheus-stack-crds → kube-prometheus-stack) is
 unaffected: wave 2 still comfortably precedes wave 6.
 
+**Moved to the infra repo's `platform-apps/values-monitoring.yaml` wave 0
+(infra#84, 2026-08-24)** — along with the rest of monitoring (wave 3 below,
+minus grafana). Reasoning below still applies verbatim, just in that file
+now (renumbered wave 2→0 there, domain-local instead of global).
+
 `kube-prometheus-stack-crds` (2026-08-13, previously an intentionally-unused
 gap): the official prometheus-community/prometheus-operator-crds chart
 (`services/platform/monitoring/crds`), pinned to the exact CRD version
@@ -127,6 +179,11 @@ Prometheus/Grafana pods themselves to run, only for grafana-gateway's
 HTTPRoute (which stays at wave 7).
 
 ## Wave 3 — kube-prometheus-stack, loki, tempo
+
+**Moved to the infra repo's `platform-apps/values-monitoring.yaml` wave 1
+(infra#84, 2026-08-24)** — reasoning below still applies verbatim, just in
+that file now (renumbered wave 3→1 there). `thanos-secret` mentioned below
+was deleted outright, not moved — see this file's top note.
 
 Moved up from wave 7 (2026-08-13) for the same reason kube-prometheus-stack-crds
 moved to wave 2: their real prerequisites are wave 2's CRDs (`skipCrds:
@@ -155,7 +212,18 @@ loki / tempo: same "real prerequisite is wave 1's secret, not anything
 cert-manager/gateway/dex-related" reasoning as kube-prometheus-stack — see
 gitops#29.
 
-## Wave 4 — velero, envoy-gateway, cert-manager, alloy, otel-collector
+## Wave 4 — envoy-gateway, cert-manager, argocd-config-monitoring
+
+(Originally titled "velero, envoy-gateway, cert-manager, alloy,
+otel-collector" — `velero` moved to the infra repo's
+`platform-apps/values-backups.yaml` wave 0, and `alloy`/`otel-collector`
+moved to that repo's `platform-apps/values-monitoring.yaml` wave 2,
+infra#84, 2026-08-24. `envoy-gateway`/`cert-manager`/
+`cert-manager-webhook-scaleway`/`argocd-config-monitoring` stay right here,
+unaffected. The reasoning below for why velero/alloy/otel-collector didn't
+need their own wave is kept for context — it doesn't apply to where they
+live now, since that's a different chart/parent Application entirely, not
+just a different wave number.)
 
 velero + envoy-gateway + cert-manager (+ its Scaleway DNS01 ACME webhook):
 these three don't depend on each other at all — velero was in its own wave
@@ -217,8 +285,10 @@ CRDs it depends on — it needs them to have actually landed first.
 
 grafana (added 2026-08-14, split out of wave 3's kube-prometheus-stack)
 joins here for a narrower reason than gateway-config's: it doesn't need
-envoy-gateway/cert-manager's CRDs at all, only wave 4's velero — its
-grafana-restore-* PreSync hook
+envoy-gateway/cert-manager's CRDs at all, only Velero (infra#84,
+2026-08-24: now the infra repo's `backups-apps` domain, guaranteed Healthy
+before `bootstrap` even starts syncing — strictly earlier than "wave 4" was)
+— its grafana-restore-* PreSync hook
 (`services/platform/velero/chart/values-scaleway.yaml`'s grafana-data
 schedule) does `kubectl get backup/restore -n velero`, which needs the
 `velero` namespace and velero.io CRDs to actually exist, not just be

@@ -8,11 +8,14 @@ kube-prometheus-stack:
     enabled: false
 
   # Grafana moved out (2026-08-14) to its own Application/chart —
-  # services/platform/monitoring/grafana-chart, wave 5 in
+  # services/platform/monitoring/grafana-chart, wave 5 in this repo's
   # bootstrap/values.yaml — because its grafana-restore-* PreSync hook
-  # (Velero PVC restore) needs the `velero` namespace/CRDs to exist first,
-  # and this whole chart runs in wave 3, before velero's wave 4. `enabled:
-  # false` here (chart default is true) is what actually stops the bundled
+  # (Velero PVC restore) needs the `velero` namespace/CRDs to exist first.
+  # This chart itself moved out of bootstrap entirely (infra#84) into the
+  # infrastructure repo's own monitoring-apps domain, which — like
+  # backups-apps (Velero) — finishes well before bootstrap even starts
+  # syncing, so grafana's wave-5 ordering here is unaffected either way.
+  # `enabled: false` here (chart default is true) is what actually stops the bundled
   # grafana subchart's Deployment/PVC/Service/default-dashboard-and-
   # datasource ConfigMaps from rendering at all, not just losing their
   # value overrides — those default dashboards/datasource are now
@@ -84,9 +87,10 @@ kube-prometheus-stack:
       # 03-storage/scaleway/env/*.tfvars thanos entry). Setting
       # objectStorageConfig is what makes prometheus-operator attach the
       # sidecar at all — no other values needed for that. existingSecret
-      # points at services/platform/monitoring/thanos-secret's
-      # ExternalSecret (wave 1), which reshapes OpenBao's raw
-      # SCW_ACCESS_KEY/SCW_SECRET_KEY into this objstore.yaml key.
+      # points at a Secret written directly by the infrastructure repo's
+      # 10-cluster/scaleway/main.tf (kubernetes_secret.thanos_objstore_config,
+      # infra#84) — no ESO/OpenBao round-trip for this one, see infra
+      # repo's platform-apps/README.md.
       thanos:
         objectStorageConfig:
           existingSecret:

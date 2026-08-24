@@ -22,9 +22,9 @@ external-secrets:
   # Soft "spread pods from this same sync-wave across nodes" — see
   # services/platform/cert-manager/chart/values-scaleway.yaml's comment on
   # the same fix. podLabels' value here is a fallback default, not the
-  # source of truth — bootstrap/templates/scaleway.yaml injects this
-  # app's real `wave` into each of the 3 podLabels below independently
-  # (see this app's `syncWaveLabelPaths` entry in bootstrap/values.yaml) —
+  # source of truth — the infrastructure repo's platform-apps chart injects
+  # this app's real `wave` into each of the 3 podLabels below independently
+  # (see this app's `syncWaveLabelPaths` entry in values-secrets.yaml, infra#84) —
   # the YAML anchor only shares the *default*, each becomes its own
   # independent map once Helm parses this file, so each still needs its
   # own override. topologySpreadConstraints has no wave number embedded
