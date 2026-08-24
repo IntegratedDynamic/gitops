@@ -1,5 +1,9 @@
 apiVersion: v2
 name: gateway-config
-description: The single shared GatewayClass/Gateway/ClusterIssuers apps attach to via HTTPRoute
+description: The single shared GatewayClass/Gateway/ClusterIssuers apps attach to via
+  HTTPRoute. Managed as an Application by the infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-networking.yaml (infra#84,
+  2026-08-25 — extracted from this repo's own bootstrap/values.yaml, see
+  that file's own note).
 type: application
 version: 0.1.0

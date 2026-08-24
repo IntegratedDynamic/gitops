@@ -56,8 +56,8 @@ need the hook to distinguish those two cases itself; not built yet).
 `cert-manager`/`gateway` namespaces' Secrets (TLS cert, ACME account key) from
 a Velero backup before this Application's ClusterIssuers/Gateway get created —
 so a cluster rebuild finds a still-valid cert instead of triggering a fresh
-ACME order (see `bootstrap/values.yaml`
-for why that matters — Let's Encrypt's rate limit already bit us once, 2026-07-25).
+ACME order (see this chart's own `values-scaleway.yaml` `activeClusterIssuer`
+comment for why that matters — Let's Encrypt's rate limit already bit us once, 2026-07-25).
 
 The restore script only accepts a backup that is **labeled**
 `velero.io/schedule-name=velero-cert-secrets` (see

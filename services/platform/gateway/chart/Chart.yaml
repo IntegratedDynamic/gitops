@@ -1,13 +1,13 @@
 apiVersion: v2
 name: envoy-gateway
 description: Wrapper chart pulling in vendor Envoy Gateway (the Gateway API
-  controller, incl. its own bundled CRDs), so this deployment goes through
-  a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list) instead of the old,
-  uncoordinated services-vendor-scaleway/services-app-scaleway split. The operator itself
-  consumes no OpenBao-sourced Secret — stage "platform", bundled with
+  controller, incl. its own bundled CRDs), managed as an Application by the
+  infrastructure repo's 10-cluster/scaleway/platform-apps/values-networking.yaml
+  (infra#84, 2026-08-25 — extracted from this repo's own
+  bootstrap/values.yaml, see that file's own note). The operator itself
+  consumes no OpenBao-sourced Secret — bundled in that domain with
   gateway-config (the actual Gateway/ClusterIssuer objects, which do need
-  cert-manager + the DNS01 webhook from stage "eso") and the other
-  platform-tier apps (wireguard, Dex, external-dns).
+  cert-manager + its DNS01 webhook, same domain).
 type: application
 version: 0.1.0
 

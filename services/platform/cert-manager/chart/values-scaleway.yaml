@@ -53,12 +53,12 @@ cert-manager:
   # actual wave number from the pod's own scalepack.fr/sync-wave label at
   # schedule time, so this block never embeds a wave number itself — only
   # podLabels below does. podLabels' value here is a fallback default, not
-  # the source of truth — bootstrap/templates/scaleway.yaml injects this
+  # the source of truth — the infrastructure repo's platform-apps chart injects this
   # app's real `wave` into each of the 3 podLabels below independently
   # (main/webhook/cainjector each become their own map once Helm parses
   # this file, so the YAML anchor only shares the *default*, each still
   # needs its own override — see this app's `syncWaveLabelPaths` entry in
-  # bootstrap/values.yaml). Set to "-1" (not a real wave) rather than a
+  # values-networking.yaml, infra#84). Set to "-1" (not a real wave) rather than a
   # plausible-looking number, so a standalone render makes the
   # un-injected fallback obvious instead of silently matching production.
   podLabels: &waveLabel

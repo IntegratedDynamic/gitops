@@ -8,25 +8,32 @@ wave assignment, and renaming history. Read it when the short version in
 `values.yaml` isn't enough, or before changing a wave assignment that looks
 arbitrary but isn't.
 
-**infra#84 (2026-08-24):** OpenBao+ESO (former waves 0-1), monitoring minus
-Grafana (former waves 2-3: kube-prometheus-stack-crds, kube-prometheus-stack,
-loki, tempo, alloy, otel-collector), and Velero (former wave 4) were
-extracted out of this chart entirely into the infrastructure repo's own
-`10-cluster/scaleway/platform-apps/` chart — three Applications
-(`secrets-apps`/`monitoring-apps`/`backups-apps`) created directly by that
-repo's `argocd.tf`, started in parallel with each other, and required to
-reach Healthy before Terraform even creates `bootstrap`'s own Application
-resource (see that chart's own README.md for the full mechanism — plain
-ArgoCD sync-wave can't express ordering across independent top-level
-Applications, only within one parent's own sync, which is exactly why this
-extraction needed a Terraform-side gate instead of just another wave
-number). The wave sections below for those apps are kept for their
+**infra#84 (2026-08-24, scope extended 2026-08-25):** OpenBao+ESO (former
+waves 0-1), monitoring minus Grafana (former waves 2-3:
+kube-prometheus-stack-crds, kube-prometheus-stack, loki, tempo, alloy,
+otel-collector), Velero (former wave 4), and cluster networking —
+envoy-gateway, cert-manager (+ its Scaleway DNS01 webhook), external-dns,
+gateway-config (former waves 4/5/6) — were extracted out of this chart
+entirely into the infrastructure repo's own
+`10-cluster/scaleway/platform-apps/` chart — four Applications
+(`secrets-apps`/`monitoring-apps`/`backups-apps`/`networking-apps`) created
+directly by that repo's `argocd.tf`, started in parallel with each other,
+and required to reach Healthy before Terraform even creates `bootstrap`'s
+own Application resource (see that chart's own README.md for the full
+mechanism — plain ArgoCD sync-wave can't express ordering across
+independent top-level Applications, only within one parent's own sync,
+which is exactly why this extraction needed a Terraform-side gate instead
+of just another wave number). Every product-specific `*-gateway`
+HTTPRoute-only chart (`dex-gateway`, `grafana-gateway`,
+`argocd-config-gateway`, `openbao-gateway`, `argo-workflows-gateway`) stays
+right here — per-product exposure, not shared routing infrastructure. The
+wave sections below for the extracted apps are kept for their
 still-relevant intra-domain reasoning (now applying inside the infra repo's
 `platform-apps` chart instead of here) — each is marked with where it
 moved. Every wave that's still live in `values.yaml` today is unaffected by
-this move; their own prerequisites (OpenBao/ESO, Velero) now finish even
-earlier (before `bootstrap` starts at all) than they did as this chart's own
-wave 0/1/4.
+this move; their own prerequisites (OpenBao/ESO, Velero, the shared
+Gateway) now finish even earlier (before `bootstrap` starts at all) than
+they did as this chart's own waves.
 
 `thanos-secret`/`loki-secret`/`tempo-secret`/`velero/secret` (the
 ExternalSecret-only charts wave 1 used to hold for these four) were deleted
@@ -100,14 +107,20 @@ not evidence this chart was ever meant to be coupled to ESO's mechanics.
 **`external-secrets`/`secrets-sync` moved to the infra repo's
 `platform-apps/values-secrets.yaml` wave 1 (infra#84, 2026-08-24)** — the
 reasoning below for why they run one wave after OpenBao still applies
-verbatim, just in that file now. Every product's own `*-secret` chart
-(dex-secret, external-dns-secret, grafana-secret, wireguard-secret,
-cert-manager-webhook-secret, argo-workflows-secret) stays right here,
-unaffected — those still need ESO/OpenBao, which is now guaranteed Healthy
-even earlier than before (finishes ahead of `bootstrap` starting at all,
-not just ahead of this wave). `thanos-secret`/`loki-secret`/`tempo-secret`/
-`velero/secret` were deleted outright, not moved — see this file's top
-note.
+verbatim, just in that file now. `cert-manager-webhook-secret` and
+`external-dns-secret` also moved (2026-08-25, scope extension) — to that
+same repo's `platform-apps/values-networking.yaml` wave 0, alongside their
+own consumers (`cert-manager`, `external-dns`) — a secret left behind here
+would apply *after* its consumer already tried to start, since `bootstrap`
+now runs after `networking-apps`, not before it. They keep the exact same
+ESO/OpenBao `ExternalSecret` mechanism, unchanged — only which parent
+Application owns them moved. Every other product's own `*-secret` chart
+(dex-secret, grafana-secret, wireguard-secret, argo-workflows-secret) stays
+right here, unaffected — those still need ESO/OpenBao, which is now
+guaranteed Healthy even earlier than before (finishes ahead of `bootstrap`
+starting at all, not just ahead of this wave). `thanos-secret`/`loki-secret`/
+`tempo-secret`/`velero/secret` were deleted outright, not moved — see this
+file's top note.
 
 Two earlier designs were tried and dropped here, in order:
 
@@ -212,18 +225,21 @@ loki / tempo: same "real prerequisite is wave 1's secret, not anything
 cert-manager/gateway/dex-related" reasoning as kube-prometheus-stack — see
 gitops#29.
 
-## Wave 4 — envoy-gateway, cert-manager, argocd-config-monitoring
+## Wave 4 — argocd-config-monitoring
 
 (Originally titled "velero, envoy-gateway, cert-manager, alloy,
 otel-collector" — `velero` moved to the infra repo's
-`platform-apps/values-backups.yaml` wave 0, and `alloy`/`otel-collector`
-moved to that repo's `platform-apps/values-monitoring.yaml` wave 2,
-infra#84, 2026-08-24. `envoy-gateway`/`cert-manager`/
-`cert-manager-webhook-scaleway`/`argocd-config-monitoring` stay right here,
-unaffected. The reasoning below for why velero/alloy/otel-collector didn't
-need their own wave is kept for context — it doesn't apply to where they
-live now, since that's a different chart/parent Application entirely, not
-just a different wave number.)
+`platform-apps/values-backups.yaml` wave 0, `alloy`/`otel-collector` moved
+to that repo's `platform-apps/values-monitoring.yaml` wave 2 (infra#84,
+2026-08-24), and `envoy-gateway`/`cert-manager`/`cert-manager-webhook-scaleway`
+moved to that repo's `platform-apps/values-networking.yaml` wave 1
+(2026-08-25, scope extension). `argocd-config-monitoring` is the only app
+still in this wave — kept as its own wave rather than renumbered down,
+same "gaps are cheap" reasoning as always. The reasoning below for why
+velero/envoy-gateway/cert-manager/alloy/otel-collector didn't need their
+own wave is kept for context — it doesn't apply to where they live now,
+since that's a different chart/parent Application entirely, not just a
+different wave number.)
 
 velero + envoy-gateway + cert-manager (+ its Scaleway DNS01 ACME webhook):
 these three don't depend on each other at all — velero was in its own wave
@@ -268,19 +284,25 @@ kube-prometheus-stack-crds Established first (the monitoring.coreos.dev
 CRDs) — shares this wave for the same "no interdependency, wave reuse is
 free" reasoning as everything else here.
 
-## Wave 5 — gateway-config, grafana
+## Wave 5 — grafana
 
-gateway-config needs BOTH wave 4's envoy-gateway (Gateway API CRDs, for its
-own Gateway/GatewayClass/HTTPRoute) AND wave 4's cert-manager
+(`gateway-config` moved to the infra repo's
+`platform-apps/values-networking.yaml` wave 2, 2026-08-25 — the reasoning
+below for why it needs its own wave, one past envoy-gateway/cert-manager's
+CRDs, still applies verbatim there. `grafana` is the only app left in this
+wave.)
+
+gateway-config needs BOTH envoy-gateway (Gateway API CRDs, for its
+own Gateway/GatewayClass/HTTPRoute) AND cert-manager
 (cert-manager.io CRDs, for its ClusterIssuers) to have actually finished
-installing their CRDs. Unlike cert-manager's own race (wave 4), this one is
+installing their CRDs. Unlike cert-manager's own race, this one is
 a genuinely hard dependency: gateway-config's ClusterIssuer objects are
 themselves cert-manager.io-typed resources — if that CRD type isn't
 registered yet, ArgoCD's sync fails outright at the API level ("could not
 find cert-manager.io/ClusterIssuer... Make sure the CRD is installed"),
 confirmed live 2026-08-12: 5 retries exhausted, never self-healing on its
 own, unlike every pod-level crash-loop race this file otherwise tolerates.
-That's why gateway-config can't be bundled into wave 4 alongside the very
+That's why gateway-config can't share a wave with the very
 CRDs it depends on — it needs them to have actually landed first.
 
 grafana (added 2026-08-14, split out of wave 3's kube-prometheus-stack)
@@ -300,16 +322,22 @@ dependency" logic as wave 4's own history. No `syncWaveLabelPaths` here
 inject-via-Helm-parameter mechanism every other app here uses produced a
 live-broken manifest for this specific chart).
 
-## Wave 6 — wireguard-config, dex-gateway, external-dns, terraform-apply
+## Wave 6 — wireguard-config, dex-gateway, terraform-apply
 
-dex-gateway needs wave 5's gateway-config to have actually finished
-reconciling — it's HTTPRoute-only (its ExternalSecret moved to dex-secret,
-wave 1; the Dex server itself moved up to wave 1 too, 2026-08-20), so it
-needs the Gateway its HTTPRoute binds to. external-dns doesn't strictly
-need the Gateway itself (its own DNS-record reconciliation is
-soft/eventually-consistent, not a hard CRD-registration dependency like
-gateway-config's ClusterIssuer was) but rides along here rather than
-getting its own wave — no observed race.
+(`external-dns` moved to the infra repo's
+`platform-apps/values-networking.yaml` wave 2, 2026-08-25 — alongside
+`gateway-config`, which it "rode along" with here for the same reason
+described below.)
+
+dex-gateway needs the infra repo's networking-apps domain's gateway-config
+to have actually finished reconciling — it's HTTPRoute-only (its
+ExternalSecret moved to dex-secret, wave 1; the Dex server itself moved up
+to wave 1 too, 2026-08-20), so it needs the Gateway its HTTPRoute binds to.
+external-dns didn't strictly need the Gateway itself (its own DNS-record
+reconciliation is soft/eventually-consistent, not a hard CRD-registration
+dependency like gateway-config's ClusterIssuer was) but rode along in this
+wave rather than getting its own — no observed race — before it moved out
+entirely.
 
 wireguard-config originally needed to wait here too, for the same reason
 dex-gateway does: its proxy-gateway sidecar discovered the Service
@@ -320,8 +348,8 @@ That sidecar was removed 2026-08-24 (infrastructure#81 — internal-cluster
 DNS + a `proxy-dynamic` sidecar replaced it, resolving targets live via
 CoreDNS instead of listing them or the K8s API, no Gateway API dependency
 at all) — wireguard-config no longer strictly needs this wave,
-but stays here for now, same "rides along, no observed race" reasoning as
-external-dns.
+but stays here for now, same "rides along, no observed race" reasoning
+external-dns used to have.
 
 dex-gateway was renamed twice on 2026-08-13: first dex-init → dex-config
 (still imprecise — "config" doesn't say what it actually creates), then
@@ -369,8 +397,8 @@ chart it split from, this rename didn't change any ordering.
 grafana-gateway (monitoring's own HTTPRoute) also stays here — moved
 2026-08-13 to be the ONLY monitoring app left in this wave (see waves 2/3
 for where the rest of monitoring went): its real dependency is the shared
-Gateway (wave 5) + Dex (wave 6) it binds to, same as every other
-*-gateway chart in this wave, not OpenBao/ESO.
+Gateway (now the infra repo's networking-apps domain) + Dex (wave 6) it
+binds to, same as every other *-gateway chart in this wave, not OpenBao/ESO.
 
 argo-workflows-gateway (2026-08-20): same "real dependency is Gateway + Dex
 from wave 6" reasoning as every other *-gateway chart in this wave —

@@ -1,9 +1,9 @@
 # Reuses the same Scaleway Domains & DNS credentials already synced for
 # external-dns (services/platform/external-dns/secret) — same API, same DomainsDNSFullAccess
 # IAM scope, just materialized into the cert-manager namespace too so
-# bootstrap/values.yaml and
-# services/platform/gateway/config's ClusterIssuers can read it. No new OpenBao seed
-# needed.
+# services/platform/gateway/config's ClusterIssuers can read it (both charts
+# live in the infra repo's platform-apps/values-networking.yaml, infra#84).
+# No new OpenBao seed needed.
 namespace: cert-manager
 
 # ClusterSecretStore declared by services/platform/secrets-sync/config.

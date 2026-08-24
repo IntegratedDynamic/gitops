@@ -1,16 +1,17 @@
 apiVersion: v2
 name: cert-manager-webhook-scaleway
 description: Wrapper chart pulling in the vendor scaleway-certmanager-webhook
-  chart (cert-manager's Scaleway DNS01 ACME solver), so this deployment goes
-  as a plain Application managed directly by bootstrap/templates/scaleway.yaml (see bootstrap/values.yaml's scalewayApps list) instead of the
-  old, uncoordinated services-vendor-scaleway/services-app-scaleway split. Unlike the main
-  cert-manager chart, this one DOES consume an OpenBao-sourced Secret
-  (scaleway-dns-credentials, materialized by
-  services/platform/cert-manager/webhook-secret) — same class of race as
-  Velero/external-dns/Dex/Grafana, just not caught in the first pass since
-  this chart reads it via a different values key
-  (secret.externalSecretName, not existingSecret/secretKeyRef). Stage "eso",
-  bundled with webhook-init.
+  chart (cert-manager's Scaleway DNS01 ACME solver), managed as an
+  Application by the infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-networking.yaml (infra#84,
+  2026-08-25 — extracted from this repo's own bootstrap/values.yaml, see
+  that file's own note). Unlike the main cert-manager chart, this one DOES
+  consume an OpenBao-sourced Secret (scaleway-dns-credentials, materialized
+  by services/platform/cert-manager/webhook-secret, moved to that same
+  domain's wave 0 — still ESO/OpenBao, unchanged mechanism) — same class of
+  race as every other product secret in this repo, just not caught in the
+  first pass since this chart reads it via a different values key
+  (secret.externalSecretName, not existingSecret/secretKeyRef).
 type: application
 version: 0.1.0
 
