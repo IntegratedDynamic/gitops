@@ -78,7 +78,7 @@ loki:
   # nginx reverse-proxy in front of Loki, on by default — disabled here:
   # one less pod on a pool that's already tight, and SingleBinary mode's
   # own pod already serves reads/writes directly. Grafana's Loki datasource
-  # (infra repo's 06-monitoring/grafana/managed) and Alloy/the OTel
+  # (infra repo's 12-monitoring/grafana/managed) and Alloy/the OTel
   # Collector all talk to the `loki` Service directly instead.
   gateway:
     enabled: false

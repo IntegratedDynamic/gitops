@@ -17,7 +17,7 @@ kube-prometheus-stack:
   # datasource ConfigMaps from rendering at all, not just losing their
   # value overrides — those default dashboards/datasource are now
   # Terraform-managed instead (infrastructure repo's
-  # 06-monitoring/grafana/managed).
+  # 12-monitoring/grafana/managed).
   grafana:
     enabled: false
 

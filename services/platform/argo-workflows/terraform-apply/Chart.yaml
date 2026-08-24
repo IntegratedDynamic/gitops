@@ -3,9 +3,9 @@ name: terraform-apply
 description: >-
   One shared WorkflowTemplate (clone the infra repo, terraform init +
   workspace select + apply) plus one CronWorkflow per Terraform root that
-  needs to run from inside the cluster -- today 05-secrets/openbao/managed
+  needs to run from inside the cluster -- today 11-secrets/openbao/managed
   (OpenBao isn't reachable from outside the cluster for a while after boot)
-  and 06-monitoring/grafana/{bootstrap,managed} (no reachability problem of
+  and 12-monitoring/grafana/{bootstrap,managed} (no reachability problem of
   its own, added for the same "reconcile without a human" reason). Add a
   future root by adding an entry to values-scaleway.yaml's terraformRoots,
   not a new template.

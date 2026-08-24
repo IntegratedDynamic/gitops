@@ -52,7 +52,7 @@ spec:
               sed "s|__PRIVATE_KEY__|$PRIVATE_KEY|" /template/wg0.conf.tmpl > /config/wg_confs/wg0.conf
               # One file per peer (the wireguard-peers Secret mounted below),
               # each containing that peer's {publicKey, allowedIPs} as JSON —
-              # see infra repo's 05-secrets/openbao/managed/main.tf for how
+              # see infra repo's 11-secrets/openbao/managed/main.tf for how
               # that Secret's content is shaped.
               for f in /peers/*; do
                 name=$(basename "$f")

@@ -147,7 +147,7 @@ actually serves). See the matching removal in
 `services/platform/monitoring/grafana-chart/values-scaleway.yaml`
 (`auth.generic_oauth.tls_client_ca` + `extraConfigmapMounts`) and the
 infrastructure repo's `10-cluster/scaleway/argocd.tf` (`oidc.config.rootCA`)
-and `05-secrets/openbao/managed/main.tf`
+and `11-secrets/openbao/managed/main.tf`
 (`oidc_discovery_ca_pem`) — same temporary CA, three consumers, removed
 together.
 

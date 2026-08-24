@@ -7,7 +7,7 @@
 # lives in this repo.
 #
 # The KV entry (keys SCW_ACCESS_KEY / SCW_SECRET_KEY) is managed by Terraform
-# in the infra repo (05-secrets/openbao/managed/main.tf,
+# in the infra repo (11-secrets/openbao/managed/main.tf,
 # vault_kv_secret_v2.loki_scaleway_s3_credentials). A SEPARATE IAM key and
 # bucket from every other tool bucket (infra repo's
 # 03-storage/scaleway/env/*.tfvars' loki entry) — same "one bucket, one
