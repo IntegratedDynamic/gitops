@@ -1,11 +1,19 @@
-# Cluster scaleway (staging).
+# Cluster scaleway.
 #
-# Volontairement désactivé en V0 : GitHub est une ressource *globale*, pas une
-# ressource par cluster. Si local et scaleway synchronisaient les mêmes cibles,
-# ils écraseraient tour à tour les mêmes secrets d'organisation — sans dégât
-# (les valeurs sont identiques) mais avec deux sources d'écriture concurrentes
-# et un historique d'audit illisible côté GitHub.
+# Devenu l'autorité sur la synchro GitHub (2026-08-25) — plus de surcharge
+# `targets: []` ici : ce cluster hérite des `targets` de la baseline
+# (values.yaml) et est désormais celui qui pousse réellement vers GitHub.
+# `values-local.yaml` porte le `targets: []` symétrique, pour éviter les deux
+# sources d'écriture concurrentes documentées ci-dessous.
 #
-# Pour activer : décider *quel* cluster fait autorité sur la synchro GitHub,
-# et ne laisser des `targets` non vides que sur celui-là.
-targets: []
+# Pourquoi scaleway et pas local : c'est le cluster réel/permanent (local
+# reste du dev jetable, recréé/détruit à volonté), et le premier consommateur
+# concret de ce round-trip est justement 10-cluster/scaleway lui-même (son
+# CI backend auth, voir 11-secrets/openbao/managed/main.tf's
+# secrets_sync_github_infrastructure_scaleway).
+#
+# Rappel du risque évité (pourquoi jamais les deux clusters à la fois) : si
+# local et scaleway synchronisaient les mêmes cibles, ils écraseraient tour à
+# tour les mêmes secrets d'organisation — sans dégât si les valeurs sont
+# identiques, mais avec deux sources d'écriture concurrentes et un
+# historique d'audit illisible côté GitHub.
