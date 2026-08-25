@@ -80,6 +80,16 @@ targets:
       - SCW_ACCESS_KEY
       - SCW_SECRET_KEY
       - WG_CI_PRIVATE_KEY
+      # 10-cluster/scaleway's own CI backend auth (state R/W + lock
+      # release) -- the state bucket's own dedicated identity
+      # (00-foundation/scaleway's per-bucket identities), not github-ci:
+      # github-ci can read/write objects project-wide but was never
+      # granted delete, so it can create the S3 native lock but not
+      # release it (confirmed live 2026-08-25, DeleteObject 403 on lock
+      # release). Merged in 11-secrets/openbao/managed/main.tf's
+      # secrets_sync_github_infrastructure_scaleway.
+      - SCALEWAY_STATE_ACCESS_KEY
+      - SCALEWAY_STATE_SECRET_KEY
       # This same round-trip (OpenBao -> ESO -> GitHub env secret) is also
       # meant to close the CI bootstrap loop for the infra repo's
       # 11-secrets/<service>/managed roots: each root's AppRole role_id/
