@@ -15,6 +15,20 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: {{ .wave | quote }}
+  # Cascade-deletes this app's own managed resources (its actual Deployment/
+  # Service/etc.) before removing the Application object itself, instead of
+  # the default "just forget about it, leave whatever it deployed running"
+  # behavior. Unconditional, not opt-in per app, same reasoning as
+  # ignoreDifferences below — added 2026-08-25 (infra#84 follow-up):
+  # confirmed live that tearing down bootstrap's own Application tree via a
+  # `terraform destroy` (infrastructure repo's 10-cluster/scaleway) happens
+  # in seconds, nowhere near enough for anything to gracefully shut down
+  # without this, leaving whatever a torn-down app deployed running,
+  # orphaned — see infrastructure repo's platform-apps/templates/apps.yaml
+  # (same fix, same day) for the specific incident (Velero's pod, torn down
+  # uncoordinated, losing a race against its own Restore CRs' finalizer).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
 
