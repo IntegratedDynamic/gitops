@@ -1,4 +1,3 @@
-{{- if .Values.enabled }}
 # Scoped to exactly what the restart hook needs: read + patch on the
 # argocd-server Deployment by name, nothing else — not a general grant on
 # Deployments in this namespace.
@@ -26,4 +25,3 @@ roleRef:
   kind: Role
   name: argocd-config-restarter
   apiGroup: rbac.authorization.k8s.io
-{{- end }}

@@ -1,4 +1,21 @@
-# Disabled by default — this chart only makes sense where ArgoCD itself
-# talks OIDC natively to our shared Dex (scaleway only, see values-scaleway.yaml
-# and the infrastructure repo's 02-cluster/scaleway/argocd.tf).
-enabled: false
+namespace: argocd
+
+# Service created by the argo-cd chart (helm_release.argocd in the
+# infrastructure repo). Needed here for restart-hook.yaml's `kubectl
+# rollout restart` target — duplicated in services/platform/argocd-config/
+# gateway's own values-scaleway.yaml, which needs the same serviceName for
+# its HTTPRoute backendRef. No cross-chart values-sharing mechanism in
+# this repo (same tradeoff every clusterSecretStoreName duplication
+# elsewhere already accepts).
+argocdServer:
+  serviceName: argocd-server
+  servicePort: 80
+
+# PostSync hook that bounces argocd-server once argocd-config-secret's OIDC
+# secret (services/platform/argocd-config/secret, a separate domain now —
+# infra#84 follow-up) is confirmed present — see templates/restart-hook.yaml
+# for why. This chart itself no longer materializes that secret; it only
+# depends on it already existing, guaranteed by
+# 10-cluster/scaleway/argocd.tf's DAG (this domain depends_on eso-data-apps).
+restartHook:
+  image: registry.k8s.io/kubectl:v1.35.3

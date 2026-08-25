@@ -22,117 +22,20 @@ repoURL: https://github.com/IntegratedDynamic/gitops.git
 # fleet, not first-ever bootstrap ordering -- every stage's apps got
 # created and synced simultaneously regardless of step order on a fresh
 # ApplicationSet. Plain sync-wave on one parent Application's own
-# resources is what actually works. A product's chart and its
-# -init/-config companion normally share a wave and sync concurrently as
-# one unit (brief intra-wave race, self-heals in seconds) EXCEPT where the
-# dependency is on another app's *completion*, not just its existence --
-# more waves are cheap, add one whenever "exists" isn't actually enough.
+# resources is what actually works.
 #
-# Each wave's comment below is the short, load-bearing "why" only --
-# abandoned earlier designs, specific confirmed-live incidents, and naming
-# history live in README.md instead. Read that before changing a wave
-# assignment that looks arbitrary but isn't.
-#
-# infra#84 (2026-08-24, scope extended 2026-08-25): OpenBao+ESO (former
-# wave 0/1), monitoring minus Grafana (former wave 2/3), Velero (former
-# wave 4), and cluster networking -- envoy-gateway/cert-manager/
-# external-dns/gateway-config, NOT the per-product *-gateway HTTPRoute
-# charts below (former wave 4/5/6) -- were extracted from this list into
-# the infrastructure repo's own 10-cluster/scaleway/platform-apps/ chart --
-# four parallel-starting Applications (secrets-apps/monitoring-apps/
-# backups-apps/networking-apps) that must all reach Healthy before THIS
-# Application (bootstrap) is even created by Terraform, replacing what
-# used to be their own sync-waves here. See that chart's README.md for the
-# full design, and this file's README.md for what changed on this side.
-# Every remaining app below that still depends on OpenBao/ESO, Velero, or
-# the shared Gateway being up (every *-secret chart, grafana's restore
-# hook, every remaining *-gateway chart) is unaffected in practice -- those
-# prerequisites now finish even earlier (before bootstrap starts at all)
-# than they did as bootstrap's own waves.
-#
-# Sorted by wave, ascending -- keep it that way.
+# infra#84 (2026-08-24, scope extended 2026-08-25, finished 2026-08-25):
+# every app that used to live here was extracted into the infrastructure
+# repo's own 10-cluster/scaleway/platform-apps/ chart -- ten
+# Terraform-created top-level Applications (secrets-apps, eso-data-apps,
+# monitoring-apps, backups-apps, networking-apps, wireguard-apps, dex-apps,
+# argocd-config-apps, grafana-apps, argo-workflows-apps,
+# terraform-apply-apps), wired into a real dependency DAG via Terraform
+# depends_on + health-wait gates (see that chart's README.md). `demo` is
+# the only app left here on purpose: it's a product, not platform, so it
+# stays gitops-native, still gated on the whole platform DAG being Healthy
+# before Terraform even creates THIS Application -- see this file's own
+# README.md for the full history of what moved and why.
 scalewayApps:
-  # ── wave 1 ────────────────────────────────────────────────────────────
-  # dex: no dependency beyond the infra repo's secrets-apps domain (OpenBao
-  # + ESO, now extracted -- see the infra#84 note above); only its public
-  # exposure (dex-gateway, wave 6) needs the Gateway. Confirmed live:
-  # eager-OIDC-discovery consumers like argo-server crash-loop if Dex isn't
-  # already reachable at their own startup, unlike Grafana/ArgoCD's lazy
-  # OIDC dial on first login.
-  - {name: dex, namespace: gateway, chartPath: services/platform/dex/chart, valueFile: values-scaleway.yaml, wave: "1", syncWaveLabelPaths: ['dex.podLabels.scalepack\.fr/sync-wave']}
-  - {name: wireguard-secret, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/secret, valueFile: values-scaleway.yaml, wave: "1"}
-  # wireguard-exit-secret: same shape, for the separate exit-node
-  # deployment (services/platform/wireguard-exit) -- see that chart's
-  # README for why it's a second, unrelated WireGuard deployment.
-  # - {name: wireguard-exit-secret, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/secret, valueFile: values-scaleway.yaml, wave: "1"}
-  - {name: dex-secret, namespace: gateway, chartPath: services/platform/dex/secret, valueFile: values.yaml, wave: "1"}
-  - {name: grafana-secret, namespace: monitoring, chartPath: services/platform/monitoring/grafana-secret, valueFile: values.yaml, wave: "1"}
-  # argo-workflows-secret: the Secrets every terraform-apply CronWorkflow
-  # pod mounts (Scaleway state-bucket credentials, plus a few tfvars only
-  # one root needs -- see services/platform/argo-workflows/secret/values.yaml).
-  - {name: argo-workflows-secret, namespace: argo-workflows, chartPath: services/platform/argo-workflows/secret, valueFile: values.yaml, wave: "1"}
-
-  # ── wave 2 ────────────────────────────────────────────────────────────
-  # argo-workflows: the workflow-controller AND server (`server.enabled`) --
-  # the server's SSO now dials Dex in-cluster, so this has to sync after
-  # wave 1's dex, not share a wave with it.
-  - {name: argo-workflows, namespace: argo-workflows, chartPath: services/platform/argo-workflows/chart, valueFile: values-scaleway.yaml, wave: "2", syncWaveLabelPaths: ['argo-workflows.controller.podLabels.scalepack\.fr/sync-wave']}
-
-  # ── wave 4 ────────────────────────────────────────────────────────────
-  # envoy-gateway, cert-manager (+ its Scaleway DNS01 ACME webhook), and
-  # gateway-config all moved out 2026-08-25 (infra#84 scope extension --
-  # see the top note above) to the infra repo's networking-apps domain.
-  # argocd-config-monitoring: a PrometheusRule, needs the infra repo's
-  # monitoring-apps domain's kube-prometheus-stack-crds Established --
-  # guaranteed true well before this wave, since that domain now finishes
-  # before bootstrap even starts (infra#84 note above).
-  - {name: argocd-config-monitoring, namespace: argocd, chartPath: services/platform/argocd-config/monitoring, valueFile: values.yaml, wave: "4"}
-
-  # ── wave 5 ────────────────────────────────────────────────────────────
-  # grafana joins here for a narrower reason -- it only needs the infra
-  # repo's backups-apps domain's velero (its grafana-restore-* PreSync hook
-  # needs the `velero` namespace/CRDs to exist) -- guaranteed true well
-  # before this wave, same reasoning as argocd-config-monitoring above.
-  # No syncWaveLabelPaths (unlike its siblings): grafana-chart hardcodes
-  # its wave label directly -- the inject-via-Helm-parameter mechanism
-  # every other app here uses produced a live-broken manifest for this
-  # specific chart (see values-scaleway.yaml's own podLabels comment).
-  - {name: grafana, namespace: monitoring, chartPath: services/platform/monitoring/grafana-chart, valueFile: values-scaleway.yaml, wave: "5"}
-
-  # ── wave 6 ────────────────────────────────────────────────────────────
-  # platform: wireguard, Dex's gateway, terraform-apply -- both wireguard-config
-  # and dex-gateway need the shared Gateway to have actually finished
-  # reconciling, now the infra repo's networking-apps domain's gateway-config
-  # (moved 2026-08-25, infra#84 scope extension) -- guaranteed true well
-  # before this wave, same "finishes even earlier" reasoning as everything
-  # else that moved out. external-dns itself also moved to that domain.
-  - {name: wireguard-config, namespace: wireguard, chartPath: services/platform/wireguard-site-to-site/config, valueFile: values-scaleway.yaml, wave: "6", syncWaveLabelPaths: ['syncWave']}
-  # wireguard-exit-config disabled 2026-08-19: its real kernel wg0
-  # interface (unlike wireguard-site-to-site's app-layer proxying)
-  # conflicts with Cilium's XDP acceleration -- confirmed live, 100%
-  # reproducible, Cilium CrashLoopBackOff on whatever node it lands on.
-  # - {name: wireguard-exit-config, namespace: wireguard-exit, chartPath: services/platform/wireguard-exit/config, valueFile: values-scaleway.yaml, wave: "6"}
-  - {name: dex-gateway, namespace: gateway, chartPath: services/platform/dex/gateway, valueFile: values.yaml, wave: "6"}
-  # terraform-apply: wave placement is a real dependency (grafana-managed
-  # can't succeed before grafana-bootstrap has minted a fresh token
-  # against the rebuilt Grafana, wave 5) -- proper per-root dependency/
-  # health gating (e.g. openbao-managed only actually needs OpenBao, now
-  # the infra repo's secrets-apps domain) is follow-up work, not done here.
-  # This chart's own PostSync hook (templates/initial-run-workflow.yaml)
-  # submits grafana-bootstrap then grafana-managed immediately once this
-  # wave syncs, instead of leaving them to wait out their next hourly
-  # CronWorkflow trigger.
-  - {name: terraform-apply, namespace: argo-workflows, chartPath: services/platform/argo-workflows/terraform-apply, valueFile: values-scaleway.yaml, wave: "6"}
-
-  # ── wave 7 ────────────────────────────────────────────────────────────
-  # every remaining *-gateway chart: same dependency (the shared Gateway,
-  # now the infra repo's networking-apps domain -- see the top note above --
-  # + Dex from wave 6), no ordering between them.
-  - {name: grafana-gateway, namespace: monitoring, chartPath: services/platform/monitoring/grafana-gateway, valueFile: values-scaleway.yaml, wave: "7"}
-  - {name: argocd-config, namespace: argocd, chartPath: services/platform/argocd-config/config, valueFile: values-scaleway.yaml, wave: "7"}
-  - {name: argocd-config-gateway, namespace: argocd, chartPath: services/platform/argocd-config/gateway, valueFile: values-scaleway.yaml, wave: "7"}
-  - {name: openbao-gateway, namespace: openbao, chartPath: services/platform/openbao/gateway, valueFile: values-scaleway.yaml, wave: "7"}
-  - {name: argo-workflows-gateway, namespace: argo-workflows, chartPath: services/platform/argo-workflows/gateway, valueFile: values.yaml, wave: "7"}
-
   # ── wave 8 ────────────────────────────────────────────────────────────
   - {name: demo, namespace: demo, chartPath: services/products/demo/chart, valueFile: values-scaleway.yaml, wave: "8", syncWaveLabelPaths: ['syncWave']}

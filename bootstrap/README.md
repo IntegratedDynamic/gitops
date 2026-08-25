@@ -45,6 +45,36 @@ with nothing to gain. OpenBao still gets the same values independently
 (`11-secrets/openbao/managed`'s `vault_kv_secret_v2` writes, unchanged) —
 see infra repo's `platform-apps/README.md` for the full reasoning.
 
+**infra#84 follow-up (2026-08-25, migration finished):** every app still
+listed in `values.yaml` after the note above — `dex`, every `*-secret`
+chart (`wireguard-secret`, `dex-secret`, `grafana-secret`,
+`argo-workflows-secret`), `argo-workflows`, `argocd-config-monitoring`,
+`grafana`, `wireguard-config`, every remaining `*-gateway` chart
+(`dex-gateway`, `argocd-config-gateway`, `openbao-gateway`,
+`argo-workflows-gateway`, `grafana-gateway`), `argocd-config`, and
+`terraform-apply` — moved to the infra repo's `platform-apps/` chart too.
+`demo` is the only app left in this file: everything else in this repo's
+`services/platform/` turned out to be platform-level infra, not
+product-level, once looked at properly (per the issue's own scope-extension
+comment), so there was no principled reason left to leave it here by
+default. Also generalized in the same pass: every `*-secret` (ExternalSecret)
+chart — including the two (`cert-manager-webhook-secret`/
+`external-dns-secret`) already moved by the note above — now lives in ONE
+dedicated `eso-data-apps` domain instead of being bundled with its own
+consumer, fixing a real bug found live (2026-08-25): `cert-manager-webhook-secret`/
+`external-dns-secret` could get their ESO cleanup finalizer stranded on
+`terraform destroy` when their old owning domain (`networking-apps`) and
+`secrets-apps` (ESO's own domain) tore down in parallel with no ordering
+between them. Centralizing every ExternalSecret in one place, with that one
+place depending on `secrets-apps`, fixes this for every consumer at once
+instead of requiring a per-domain special case — see infra repo's
+`platform-apps/README.md` (`helm_release.eso_data_apps`) for the full
+mechanism. `services/platform/argocd-config/config` was split into
+`services/platform/argocd-config/secret` (the ExternalSecret, now feeding
+`eso-data-apps`) + a trimmed `config` (just the PostSync restart-hook) as
+part of this — same "mixed chart split in two" treatment wave 1's own
+history above already documents for `dex`/`grafana`.
+
 ## Why sync-wave on one Application's own resources, not an ApplicationSet
 
 Every scaleway Application is rendered directly as a managed resource of
