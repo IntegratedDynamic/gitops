@@ -1,0 +1,6 @@
+# No overrides needed — this chart's crds/ folder is a static, vendored
+# copy (see Chart.yaml), not a templated Helm dependency, so there's
+# nothing to configure. Kept as an empty file so this chart follows the
+# same applications/scaleway -> values-scaleway.yaml convention as every
+# other chart in this repo (see services/platform/monitoring/crds' own
+# identical placeholder).

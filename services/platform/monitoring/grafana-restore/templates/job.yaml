@@ -1,17 +1,17 @@
-{{- if .Values.grafanaRestore.enabled }}
+# Extracted from grafana-chart's own ArgoCD PreSync hook (2026-08-27) into
+# its own domain — mirrors services/platform/gateway/cert-restore/templates/job.yaml
+# exactly, see that file's own header comment for the full "why" (a plain
+# cross-Application sync-wave, tried once already as services/platform/velero/init
+# on 2026-07-29, failed live twice: ArgoCD's own ordering across sibling
+# Applications isn't a hard blocking guarantee). Ordering relative to
+# grafana itself is now Terraform's module.wait_restore_healthy (argocd.tf),
+# not an ArgoCD PreSync hook.
+{{- if .Values.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: grafana-restore
   namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-weight: "1"
-    # BeforeHookCreation: delete the previous instance (if the last sync's
-    # attempt failed and left it behind) before creating a new one, so a
-    # retry always gets a fresh Job rather than erroring on immutable
-    # fields. HookSucceeded: also clean up after a successful run.
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   backoffLimit: 2
   template:
@@ -31,8 +31,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: restore
-          image: "{{ .Values.grafanaRestore.image.repository }}:{{ .Values.grafanaRestore.image.tag }}"
-          imagePullPolicy: {{ .Values.grafanaRestore.image.pullPolicy }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["sh", "/scripts/restore.sh"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -40,7 +40,7 @@ spec:
               drop: ["ALL"]
           env:
             - name: SCHEDULE_NAME
-              value: {{ .Values.grafanaRestore.scheduleName | quote }}
+              value: {{ .Values.scheduleName | quote }}
             - name: RESTORE_NAMESPACE
               value: {{ .Release.Namespace | quote }}
           volumeMounts:

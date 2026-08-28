@@ -1,32 +1,10 @@
-# Consumed by this chart's own templates/grafana-restore-*.yaml. scheduleName
-# is the actual Schedule object name Velero creates ("<release-name>-<schedules
-# key>" — velero's own chart prepends its release name "velero", confirmed
-# against its fullname helper), not just the "grafana-data" key in
-# services/platform/velero/chart/values-scaleway.yaml.
-#
-# enabled: true — flipped 2026-08-14 once a real backup existed
-# (`kubectl exec -n velero deploy/velero -c velero -- /velero backup create
-# --from-schedule velero-grafana-data --wait`, confirmed Completed and
-# correctly labeled velero.io/schedule-name=velero-grafana-data). Started
-# false for the same chicken-and-egg gap as gateway-config's own
-# cert-restore (services/platform/gateway/config): the restore Job's own
-# 25-minute "wait for a synced backup, then give up and proceed empty"
-# budget pays that full wait for nothing on a schedule with zero backup
-# history. Mirrors the exact same enabled-gate
-# services/platform/openbao/init/values.yaml already uses ("Set to false
-# to render the chart as a no-op, e.g. environments without snapshots") —
-# not a new pattern, this repo's existing answer to exactly this problem.
-# See services/platform/gateway/config/README.md for the full writeup.
-#
-# Stays top-level: consumed by THIS chart's own templates/grafana-restore-*.yaml,
-# not the grafana subchart.
-grafanaRestore:
-  enabled: true
-  scheduleName: velero-grafana-data
-  image:
-    repository: alpine/kubectl
-    tag: "1.35.3"
-    pullPolicy: IfNotPresent
+# Grafana's own PVC restore (from Velero's velero-grafana-data schedule) is
+# extracted (2026-08-27) into its own domain,
+# services/platform/monitoring/grafana-restore (infra repo's
+# 10-cluster/scaleway/platform-apps/values-restore.yaml), gated via a real
+# Terraform-enforced wait (module.wait_restore_healthy, argocd.tf) instead
+# of an ArgoCD PreSync hook on this chart. See that chart's own
+# templates/job.yaml for the full history.
 
 # Everything below nests under `grafana:` because that's this chart's
 # dependency NAME (Chart.yaml), not because of what this wrapper chart

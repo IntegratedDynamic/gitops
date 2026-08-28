@@ -60,6 +60,13 @@ external-secrets:
       requests:
         cpu: 10m
         memory: 64Mi
+      # limits.memory bumped 128Mi -> 256Mi (2026-08-27): confirmed live,
+      # OOMKilled during a fresh-cluster boot's initial burst (the same
+      # window crds-apps' wider CRD set widened, see
+      # 10-cluster/scaleway/platform-apps/README.md's CRD-graph
+      # generalization) -- 128Mi had no real headroom above this
+      # component's own idle usage the original 2026-08-11 sizing was based
+      # on, let alone a burst spike.
       limits:
         cpu: 50m
-        memory: 128Mi
+        memory: 256Mi

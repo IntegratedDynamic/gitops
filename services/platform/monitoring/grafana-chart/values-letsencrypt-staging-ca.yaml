@@ -1,0 +1,33 @@
+# Applied on top of values-scaleway.yaml only when var.letsencrypt_staging
+# is true (infra repo's argocd.tf/platform-apps/templates/apps.yaml,
+# values-grafana.yaml's extraValueFileParam) -- trusts the Let's Encrypt
+# staging root CA for Grafana's own server-side OIDC calls to
+# https://auth.scalepack.fr (auth_url/token_url/api_url in
+# values-scaleway.yaml) without touching the pod's system trust store at
+# all.
+#
+# tls_client_ca is Grafana's own native per-provider CA override
+# (auth.generic_oauth section of grafana.ini) -- no init container, no
+# merged CA bundle, no securityContext changes needed. Same mechanism this
+# repo used historically for the same purpose (2026-07-25, commit ce5fee1,
+# reverted once back on letsencrypt-prod: c566440) -- reused here instead
+# of the heavier merge-CA-bundle init-container approach that was tried and
+# reverted for ArgoCD/OpenBao (see infra repo's main.tf comment on
+# var.letsencrypt_staging: OpenBao's own pod-level securityContext,
+# runAsUser 100/runAsNonRoot, blocked `apk add` from writing its package DB
+# -- "Permission denied", Init:Error crash-loop, confirmed live 2026-08-27).
+#
+# The letsencrypt-staging-ca ConfigMap itself is created once in the
+# monitoring namespace by that same Terraform flag
+# (10-cluster/scaleway/main.tf) -- this chart only ever references it by
+# name, never carries its own copy of the cert.
+grafana:
+  grafana.ini:
+    auth.generic_oauth:
+      tls_client_ca: /etc/grafana/certs/letsencrypt-staging/letsencrypt-staging-root-ca.pem
+
+  extraConfigmapMounts:
+    - name: letsencrypt-staging-ca
+      configMap: letsencrypt-staging-ca
+      mountPath: /etc/grafana/certs/letsencrypt-staging
+      readOnly: true

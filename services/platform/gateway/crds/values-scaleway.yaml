@@ -1,0 +1,19 @@
+# Unlike services/platform/monitoring/crds' prometheus-operator-crds
+# (everything enabled by chart default), this standalone gateway-crds-helm
+# distribution gates both CRD sets behind explicit opt-in flags — needs
+# both enabled to match what envoy-gateway's own bundled `crds` subchart
+# installs unconditionally (services/platform/gateway/chart's gateway-helm
+# dependency), so this Application's Established CRDs are the same set
+# envoy-gateway itself would otherwise install, just landing one wave
+# earlier. `channel: experimental` matches this cluster's existing
+# ExperimentalGatewayAPISupport (visible in cert-manager's own startup log
+# when it checks for these CRDs) — the experimental channel is a superset
+# of standard (adds TCPRoute/TLSRoute/UDPRoute/GRPCRoute/BackendTLSPolicy),
+# not a different/incompatible set.
+gateway-crds-helm:
+  crds:
+    gatewayAPI:
+      enabled: true
+      channel: experimental
+    envoyGateway:
+      enabled: true

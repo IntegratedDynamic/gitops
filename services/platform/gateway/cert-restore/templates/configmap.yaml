@@ -1,0 +1,105 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cert-restore
+  namespace: {{ .Release.Namespace }}
+data:
+  restore.sh: |
+    #!/usr/bin/env sh
+    set -eu
+
+    # Idempotence: only CREATE the Restore once — if it already exists, skip
+    # straight to the wait loop instead of recreating it.
+    #
+    # CONFIRMED LIVE (2026-08-26), a real race, not a hypothetical: the
+    # previous version of this idempotence check exited 0 the instant the
+    # Restore object existed, WITHOUT checking its phase. If THIS Job
+    # instance was itself recreated while an EARLIER attempt's own wait loop
+    # was still in flight, the new instance saw the already-created-but-
+    # not-yet-Completed Restore and exited 0 immediately, letting the
+    # consumer proceed before the restore had actually finished writing the
+    # secret — exactly the Let's Encrypt rate-limit risk this whole
+    # mechanism exists to prevent. Now "already exists" only skips the
+    # CREATE step, never the WAIT.
+    if ! kubectl get restore cert-secrets-restore -n velero >/dev/null 2>&1; then
+      # Wait for a completed backup to sync from the schedule. Velero's own
+      # controller re-syncs Backup objects from the bucket into the cluster on
+      # a timer (velero/chart's values-scaleway.yaml sets backupSyncPeriod:
+      # 10s) — on a fresh cluster that sync hasn't necessarily happened yet,
+      # and a Restore created before it has fails validation permanently
+      # (Velero does not retry a FailedValidation restore).
+      #
+      # Budget ~25 min, not ~10: this exits 0 (success) on timeout by
+      # design — a genuinely-empty-bucket first boot shouldn't block this
+      # domain's own health-wait forever. There's no retry-based recovery
+      # from that: once cert-manager issues a fresh cert off the back of
+      # it, the ACME order already happened, and existingResourcePolicy is
+      # deliberately left at its safe default (skip-if-exists, see git
+      # history) — so even a later sync that *does* find a backup will
+      # just skip a Secret that's already there. A too-short budget can't
+      # tell "genuinely no backup yet" (the real first-ever bootstrap case
+      # this fallback is for) apart from "there IS one, the rest of the
+      # OpenBao → ESO → Velero credential chain just hasn't finished yet"
+      # (confirmed live: a cold boot took ~15 min end to end before Velero
+      # even had working credentials to sync anything).
+      i=0
+      while true; do
+        if kubectl get backup -n velero -l "velero.io/schedule-name=${SCHEDULE_NAME}" --no-headers 2>/dev/null | grep -q .; then
+          break
+        fi
+        i=$((i + 1))
+        if [ "$i" -gt 150 ]; then
+          echo "No backup synced from schedule ${SCHEDULE_NAME} after budget — leaving cert-manager/gateway empty for a fresh issuance."
+          exit 0
+        fi
+        echo "waiting for a backup from schedule ${SCHEDULE_NAME} to sync..."
+        sleep 10
+      done
+
+      # Build the namespace list as JSON — sidesteps YAML's indentation
+      # sensitivity entirely (kubectl accepts JSON as valid manifest input).
+      NS_JSON=""
+      IFS=','
+      for ns in $RESTORE_NAMESPACES; do
+        NS_JSON="${NS_JSON}\"${ns}\","
+      done
+      unset IFS
+      NS_JSON="[${NS_JSON%,}]"
+
+      cat <<EOF | kubectl create -f -
+      {
+        "apiVersion": "velero.io/v1",
+        "kind": "Restore",
+        "metadata": {
+          "name": "cert-secrets-restore",
+          "namespace": "velero"
+        },
+        "spec": {
+          "scheduleName": "${SCHEDULE_NAME}",
+          "includedNamespaces": ${NS_JSON},
+          "includedResources": ["secrets"]
+        }
+      }
+    EOF
+    else
+      echo "Restore already exists -- skipping creation, still waiting for it to finish."
+    fi
+
+    # Wait for it to finish (runs whether just-created above or already
+    # existing) — this Job's own health (Complete) is what makes this
+    # domain's Application Healthy, which is what
+    # module.wait_restore_healthy (argocd.tf) actually polls for before
+    # letting gateway-config's own Application be created.
+    i=0
+    while true; do
+      phase=$(kubectl get restore cert-secrets-restore -n velero -o jsonpath='{.status.phase}' 2>/dev/null || true)
+      case "$phase" in
+        Completed|PartiallyFailed) echo "Restore: $phase"; exit 0 ;;
+        Failed|FailedValidation) echo "Restore: $phase"; exit 1 ;;
+      esac
+      i=$((i + 1))
+      if [ "$i" -gt 60 ]; then echo "timeout waiting for Restore to finish"; exit 1; fi
+      sleep 5
+    done
+{{- end }}

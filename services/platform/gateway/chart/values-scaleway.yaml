@@ -3,6 +3,23 @@
 # `gateway-helm:` (not `envoy-gateway:`) — that's the dependency's real
 # chart name in chart/Chart.yaml, distinct from this wrapper's own name.
 gateway-helm:
+  # crds.gatewayAPI.safeUpgradePolicy: disabled here (2026-08-26) -- this
+  # renders the safe-upgrades.gateway.networking.k8s.io
+  # ValidatingAdmissionPolicy/-Binding pair from a plain `templates/`
+  # manifest inside gateway-helm's OWN bundled `crds` subchart, NOT from
+  # Helm's special `crds/` directory -- meaning ArgoCD's `skipCrds: true`
+  # (10-cluster/scaleway's values-networking.yaml, needed so this chart
+  # doesn't also fight the standalone gateway-api-crds domain for the REAL
+  # CRDs) has no effect on it at all. Confirmed live: both this Application
+  # and gateway-api-crds kept re-claiming ownership of the same VAP/Binding
+  # objects (`argocd.argoproj.io/tracking-id` flipping between them),
+  # causing perpetual OutOfSync no `ignoreDifferences` rule could paper
+  # over, since it's a genuine two-owners conflict, not a diff-normalization
+  # gap. gateway-api-crds (values-crds.yaml) owns this pair exclusively now.
+  crds:
+    gatewayAPI:
+      safeUpgradePolicy:
+        enabled: false
   deployment:
     pod:
       # Soft "spread pods from this same sync-wave across nodes" (shared

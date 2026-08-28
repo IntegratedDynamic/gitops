@@ -1,0 +1,15 @@
+apiVersion: v2
+name: cert-restore
+description: Restores cert-manager's ACME account key + gateway-config's
+  wildcard TLS secret from the latest Velero backup, before gateway-config's
+  own ClusterIssuers/Gateway sync. Extracted (2026-08-27) from gateway-config's
+  own ArgoCD PreSync hook into its own domain (infra repo's
+  10-cluster/scaleway/platform-apps/values-restore.yaml), gated on a real
+  Terraform-enforced wait for backups-apps (Velero) being genuinely healthy
+  (module.wait_backups_healthy) instead of ArgoCD's own PreSync-hook
+  mechanism -- see templates/job.yaml for the full history of why a plain
+  cross-Application ordering was tried and abandoned once already
+  (2026-07-29, services/platform/velero/init) before PreSync hooks became
+  the interim fix this itself now replaces.
+type: application
+version: 0.1.0

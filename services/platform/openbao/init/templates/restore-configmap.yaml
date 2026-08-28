@@ -15,6 +15,9 @@ data:
     # Idempotent: never touches an already-initialized cluster.
     set -eu
 
+    KC=/shared/kubectl
+    MARKER=openbao-restore-state
+
     # 1. Wait for the OpenBao API. `openbao` syncs in parallel (separate
     #    Application); its pod comes up 0/1 (uninitialized) but the `openbao`
     #    Service publishes not-ready addresses, so the API is reachable. `bao
@@ -34,11 +37,60 @@ data:
       sleep 5
     done
 
-    # 2. Idempotence guard: exit 0 of `init -status` means already initialized.
-    #    Never clobber a live cluster (protects against selfHeal re-syncs).
-    if bao operator init -status >/dev/null 2>&1; then
-      echo "OpenBao already initialized — nothing to restore."
+    # 2. Idempotence guard, generalized (2026-08-27) to survive an
+    #    interrupted retry -- confirmed live: a bare `bao operator init
+    #    -status` check (the original guard here) only proves SOME init ran,
+    #    not that the actual snapshot restore below ever completed. Step 4's
+    #    throwaway init is itself an unconditional, un-guarded `bao operator
+    #    init` call -- if THIS Job gets killed/replaced (ArgoCD selfHeal
+    #    recreating it under resource pressure, confirmed live via
+    #    autoHealAttemptsCount: 2 on a fresh boot with enough concurrent
+    #    Applications starting at once) after that throwaway init but before
+    #    the restore finishes, a retry's `init -status` check sees the
+    #    leftover throwaway init and wrongly treats it as "already
+    #    genuinely restored" -- permanently skipping the real restore for
+    #    that boot, leaving OpenBao's Kubernetes-auth backend (and every
+    #    other auth/secrets config) completely empty. `openbao-restore-state`
+    #    is a durable-across-retries (lives in etcd, not this Job's own
+    #    pod/attempt) Secret tracking whether the LAST attempt's restore
+    #    genuinely finished, not just whether some init happened:
+    #    - complete=true: a real restore finished. Never touch it again
+    #      (this is the ORIGINAL guard's whole purpose -- protects a live,
+    #      already-restored cluster from a later selfHeal re-sync).
+    #    - complete=false + a saved token: a PRIOR attempt got interrupted
+    #      after its own throwaway init but before finishing the restore --
+    #      safe and necessary to resume, reusing that saved root token
+    #      (still valid: OpenBao only ever generates root tokens without an
+    #      expiry by default, and nothing else could have consumed it).
+    #    - no marker at all + already initialized: no evidence either way
+    #      (e.g. a cluster from before this marker mechanism existed) --
+    #      falls back to the original safe default of leaving it alone.
+    marker_field() {
+      $KC get secret "$MARKER" -o "jsonpath={.data.$1}" 2>/dev/null | base64 -d 2>/dev/null || true
+    }
+
+    MARKER_COMPLETE=""
+    MARKER_TOKEN=""
+    if $KC get secret "$MARKER" >/dev/null 2>&1; then
+      MARKER_COMPLETE=$(marker_field complete)
+      MARKER_TOKEN=$(marker_field token)
+    fi
+
+    if [ "$MARKER_COMPLETE" = "true" ]; then
+      echo "Restore already completed (marker secret confirms it) — nothing to do."
       exit 0
+    fi
+
+    RESUMING=false
+    if bao operator init -status >/dev/null 2>&1; then
+      if [ -n "$MARKER_TOKEN" ]; then
+        echo "OpenBao already initialized, but the marker shows a prior restore attempt never finished — resuming with the saved token instead of skipping."
+        export BAO_TOKEN="$MARKER_TOKEN"
+        RESUMING=true
+      else
+        echo "OpenBao already initialized and no interrupted-restore marker found — assuming a legitimately restored, live instance. Nothing to do."
+        exit 0
+      fi
     fi
 
     # 3. Locate the latest snapshot. Names sort chronologically.
@@ -50,14 +102,61 @@ data:
     fi
     echo "Latest snapshot: $LATEST"
 
-    # 4. Throwaway init: works on empty storage and yields a root token valid long
-    #    enough to perform the restore. The restore replaces all storage (auth,
-    #    policies, secrets) so this token becomes void afterwards — by design.
-    ROOT=$(bao operator init | grep -i 'Initial Root Token' | awk '{print $NF}')
-    export BAO_TOKEN="$ROOT"
+    if [ "$RESUMING" = "false" ]; then
+      # 4. Throwaway init: works on empty storage and yields a root token valid
+      #    long enough to perform the restore. The restore replaces all storage
+      #    (auth, policies, secrets) so this token becomes void afterwards — by
+      #    design. Persisted to the marker Secret BEFORE attempting the restore
+      #    below, so an interruption from this point on is recoverable by a
+      #    retry instead of silently skipping forever (see step 2's comment).
+      #
+      # Confirmed live (2026-08-27): this used to pipe straight into grep/awk
+      # (`bao operator init | grep ... | awk ...`), which under plain `sh`'s
+      # `set -e` only checks the LAST command in a pipeline's exit code, not
+      # `bao operator init`'s own -- `pipefail` is a bash-ism this script's
+      # `#!/usr/bin/env sh` shebang doesn't get. When step 2's `-status`
+      # check raced OpenBao becoming initialized moments earlier (by
+      # whatever legitimately initialized it before this attempt even
+      # started) and returned a false "not yet initialized" reading, this
+      # `bao operator init` call itself failed with "Vault is already
+      # initialized" -- but the pipeline still reported success (grep found
+      # no match, awk ran on empty input and exited 0), so $ROOT silently
+      # became an empty string, got exported as BAO_TOKEN, written into the
+      # marker as a real-looking-but-useless value, and the restore call
+      # below went out completely unauthenticated -- guaranteed 403. Worse,
+      # a RETRY then read that empty-token marker, saw `-n "$MARKER_TOKEN"`
+      # as false, and fell into step 2's "no marker found, assume
+      # legitimate, skip" branch -- silently reproducing the original bug
+      # through a different path. Capturing the command's own output AND
+      # exit code directly (no pipe) fixes the exit-code blind spot, and
+      # this now fails loudly (exit 1, marker left untouched) instead of
+      # limping forward with an empty token -- a Job retry re-evaluates
+      # step 2 fresh rather than inheriting a poisoned marker.
+      INIT_OUTPUT=$(bao operator init 2>&1) || {
+        echo "bao operator init failed -- OpenBao is likely already initialized by whatever won a race against our own -status check above. Aborting without touching the marker or attempting a restore with no valid credentials; a retry will re-check state fresh."
+        echo "$INIT_OUTPUT"
+        exit 1
+      }
+      ROOT=$(echo "$INIT_OUTPUT" | grep -i 'Initial Root Token' | awk '{print $NF}')
+      if [ -z "$ROOT" ]; then
+        echo "bao operator init succeeded but no root token could be parsed from its output -- aborting rather than proceeding with an empty token."
+        echo "$INIT_OUTPUT"
+        exit 1
+      fi
+      export BAO_TOKEN="$ROOT"
+      $KC create secret generic "$MARKER" \
+        --from-literal=token="$BAO_TOKEN" --from-literal=complete=false \
+        --dry-run=client -o yaml | $KC apply -f -
+    fi
 
     s3cmd get "$LATEST" /tmp/restore.snapshot \
       --host="$S3_HOST" --host-bucket="$S3_BUCKET" $S3CMD_EXTRA_FLAG
     bao operator raft snapshot restore /tmp/restore.snapshot
-    echo "Restored $LATEST (throwaway root token is now void)."
+    echo "Restored $LATEST (throwaway root token is now void — the restore replaced the token store it lived in)."
+
+    # Scrub the (now-void) token from the marker rather than leave a stale
+    # secret value sitting in etcd indefinitely.
+    $KC create secret generic "$MARKER" \
+      --from-literal=complete=true \
+      --dry-run=client -o yaml | $KC apply -f -
 {{- end }}

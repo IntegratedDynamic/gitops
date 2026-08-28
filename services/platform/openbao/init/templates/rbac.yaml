@@ -1,0 +1,39 @@
+{{- if .Values.restore.enabled }}
+# Scoped to exactly what restore.sh's marker-secret mechanism needs (see that
+# script's own comment on openbao-restore-state) -- create is unscoped by
+# name within this namespace only (Kubernetes RBAC resourceNames doesn't
+# apply to create requests, since the object doesn't exist yet at
+# authorization time), get/patch/update are scoped to that one secret name
+# specifically.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-init-restore-marker
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["openbao-restore-state"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-init-restore-marker
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-init-restore-marker
+subjects:
+  - kind: ServiceAccount
+    name: openbao-init
+    namespace: {{ .Release.Namespace }}
+{{- end }}

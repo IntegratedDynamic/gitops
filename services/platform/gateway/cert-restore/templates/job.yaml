@@ -1,0 +1,68 @@
+# Why this is a plain Job in its own domain now, not an ArgoCD PreSync hook
+# on gateway-config (where it used to live) or a bare cross-Application
+# sync-wave (services/platform/velero/init, the very first attempt,
+# 2026-07-29 — deleted): ArgoCD's sync-wave ordering across sibling
+# Applications is NOT a hard blocking guarantee — confirmed live across two
+# real cluster rebuilds back then, each with a different transient failure,
+# where a downstream wave's sync proceeded anyway while an upstream sibling
+# was still stuck. A PreSync hook fixed that by scoping the guarantee to
+# gateway-config's own sync lifecycle instead — but that meant every
+# consumer needing this kind of restore had to duplicate the same
+# hook/RBAC/idempotence-script shape inside its own chart (grafana-restore
+# did, verbatim).
+#
+# This domain restores the SAME kind of guarantee a different way: Terraform's
+# module.wait_restore_healthy (argocd.tf) polls this domain's own Application
+# health from OUTSIDE ArgoCD's reconciliation loop entirely (a real Job,
+# not ArgoCD's own hook/wave semantics) and blocks
+# helm_release.networking_resources_apps from even CREATING gateway-config's
+# Application until this Job (and grafana-restore's) is Healthy/Complete —
+# the same mechanism already proven live for crds-apps/secrets-apps/
+# standalone-apps' own cross-domain orderings. That's what makes
+# centralizing this into one shared domain finally safe, where the 2026-07-29
+# sync-wave attempt wasn't.
+{{- if .Values.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cert-restore
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cert-restore
+        component: restore
+    spec:
+      serviceAccountName: cert-restore
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "/scripts/restore.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: SCHEDULE_NAME
+              value: {{ .Values.scheduleName | quote }}
+            - name: RESTORE_NAMESPACES
+              value: "{{ join "," .Values.namespaces }}"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: cert-restore
+{{- end }}

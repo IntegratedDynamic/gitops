@@ -26,8 +26,9 @@ wildcardCertSecretName: scalepack-fr-wildcard-tls
 # every *other* native-OIDC app, and any interactive browser login,
 # still goes through this cert.) A full cluster rebuild still wipes
 # scalepack-fr-wildcard-tls and forces a new ACME order each time
-# (certRestore below exists specifically to avoid that by restoring the
-# previous cert from backup instead) -- if a burst of same-week rebuilds
+# (services/platform/gateway/cert-restore exists specifically to avoid
+# that by restoring the previous cert from backup instead) -- if a burst
+# of same-week rebuilds
 # ever hits the rate limit again, flip back to staging same as before,
 # but actually flip it back this time once the window passes.
 activeClusterIssuer: letsencrypt-prod
@@ -39,27 +40,11 @@ acmeEmail: nicolas.brieussel@gmail.com
 scalewayCredentialsSecretName: scaleway-dns-credentials
 
 
-# PreSync hook (templates/cert-restore-*.yaml): restores the ACME account key
-# + wildcardCertSecretName above from the latest Velero backup BEFORE this
-# chart's own ClusterIssuers/Gateway get created on a fresh cluster — see
-# those templates for why this has to be a hook on THIS Application rather
-# than a separate wave-ordered one (services/platform/velero/init, tried first, proved
-# unreliable: a sibling Application's sync-wave doesn't reliably block this
-# one's, confirmed live across two rebuilds with two different root causes).
-certRestore:
-  # true here (unlike services/platform/monitoring/grafana-chart's
-  # grafanaRestore.enabled, which defaults false): this schedule has
-  # already been running long enough to have real backups — confirmed live
-  # across two real cluster rebuilds. A fresh chart/schedule with zero
-  # backup history yet should start this false instead (see that chart's
-  # own comment on the same gate) to skip the restore Job's 25-minute
-  # "wait for a backup that can't exist yet" budget for nothing.
-  enabled: true
-  scheduleName: velero-cert-secrets
-  namespaces:
-    - cert-manager
-    - gateway
-  image:
-    repository: alpine/kubectl
-    tag: "1.35.3"
-    pullPolicy: IfNotPresent
+# The ACME account key + wildcardCertSecretName above are restored from the
+# latest Velero backup BEFORE this chart's own ClusterIssuers/Gateway get
+# created on a fresh cluster -- extracted (2026-08-27) into its own domain,
+# services/platform/gateway/cert-restore (infra repo's
+# 10-cluster/scaleway/platform-apps/values-restore.yaml), gated via a real
+# Terraform-enforced wait (module.wait_restore_healthy, argocd.tf) instead
+# of an ArgoCD PreSync hook on this chart. See that chart's own
+# templates/job.yaml for the full history.
