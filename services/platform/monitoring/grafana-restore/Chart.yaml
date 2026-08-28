@@ -1,0 +1,13 @@
+apiVersion: v2
+name: grafana-restore
+description: Restores Grafana's own PVC (CSI VolumeSnapshot-backed) from the
+  latest Velero backup, before grafana's own Deployment/PVC sync. Extracted
+  (2026-08-27) from grafana-chart's own ArgoCD PreSync hook into its own
+  domain (infra repo's 10-cluster/scaleway/platform-apps/values-restore.yaml)
+  -- mirrors services/platform/gateway/cert-restore exactly, see that
+  chart's own templates/job.yaml for the full history of why a plain
+  cross-Application ordering was tried and abandoned once already
+  (2026-07-29, services/platform/velero/init) before ArgoCD PreSync hooks
+  became the interim fix this itself now replaces.
+type: application
+version: 0.1.0

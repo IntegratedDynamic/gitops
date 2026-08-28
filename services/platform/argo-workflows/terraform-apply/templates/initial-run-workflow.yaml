@@ -19,10 +19,8 @@ already use (values-scaleway.yaml), so it can't drift from them.
 # run until their next scheduled cron tick otherwise -- up to ~50 minutes
 # later on a fresh rebuild.
 #
-# Fixed name (not generateName), same as grafana-restore-job.yaml/
-# cert-restore-job.yaml's own hook resources -- BeforeHookCreation needs a
-# stable name to find and delete the previous sync's instance before
-# creating this one.
+# Fixed name (not generateName): BeforeHookCreation needs a stable name to
+# find and delete the previous sync's instance before creating this one.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:

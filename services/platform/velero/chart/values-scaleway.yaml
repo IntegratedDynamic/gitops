@@ -52,16 +52,16 @@
 # its own system-managed scw-snapshot/scw-snapshot-retain) — this chart
 # only needs to point Velero at them via its own VolumeSnapshotClass.
 #
-# Restoring after a rebuild is automatic: a PreSync hook Job on
-# services/platform/gateway/config (not here, and not a separate wave-ordered
-# Application — that was tried first and proved unreliable, see that
-# chart's templates/cert-restore-job.yaml) waits for a completed backup to
-# sync, then restores it, before gateway-config's own Gateway/ClusterIssuers
-# get created — the thing that would otherwise trigger a fresh ACME order.
-# The grafana-data schedule below gets the same treatment, via its own
-# PreSync hook Job templated straight into
-# services/platform/monitoring/chart (grafana-restore-*.yaml) — same reason,
-# a different consuming Application.
+# Restoring after a rebuild is automatic: services/platform/gateway/cert-restore
+# (a dedicated domain, not a PreSync hook on gateway-config and not bundled
+# here either — see that chart's own README.md for the full history,
+# including the cross-Application sync-wave attempt that was tried first
+# and proved unreliable) waits for a completed backup to sync, then
+# restores it, before gateway-config's own Gateway/ClusterIssuers get
+# created — the thing that would otherwise trigger a fresh ACME order. The
+# grafana-data schedule below gets the same treatment via its own dedicated
+# domain, services/platform/monitoring/grafana-restore — same reason, a
+# different consumer.
 #
 # Values below nest under `velero:` because this chart is a thin wrapper
 # declaring the real Velero chart as a dependency (see chart/Chart.yaml) —

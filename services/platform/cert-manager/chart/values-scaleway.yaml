@@ -3,8 +3,16 @@
 # chart/Chart.yaml) — Helm only exposes a subchart the values under its
 # dependency name.
 cert-manager:
+  # This chart's own copy of every CRD (cert-manager.io + acme.cert-manager.io)
+  # is disabled -- they now live in the shared crds-apps domain
+  # (services/platform/cert-manager/crds, infrastructure repo's
+  # 10-cluster/scaleway/platform-apps/values-crds.yaml), same "one shared
+  # CRDs domain for the whole platform" treatment envoy-gateway's
+  # skipCrds: true already uses. Without this, both Applications would try
+  # to own the same CRD objects -- the exact class of conflict skipCrds
+  # already guards against for envoy-gateway/kube-prometheus-stack.
   crds:
-    enabled: true
+    enabled: false
 
   # Lets cert-manager watch Gateway API `Gateway` listeners directly
   # (via the cert-manager.io/cluster-issuer annotation) instead of

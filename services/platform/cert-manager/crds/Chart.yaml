@@ -1,0 +1,21 @@
+apiVersion: v2
+name: crds
+description: >-
+  cert-manager's own CRDs (cert-manager.io + acme.cert-manager.io), split
+  into their own earlier-wave Application so every consumer platform-wide
+  (not just cert-manager's own controller) can rely on them already being
+  Established — same "one shared crds-apps domain" treatment as
+  services/platform/gateway/crds and services/platform/monitoring/crds
+  (infrastructure repo's 10-cluster/scaleway/platform-apps/values-crds.yaml).
+  Vendored verbatim (via `helm template --show-only`, values resolved
+  against services/platform/cert-manager/chart/values-scaleway.yaml) from
+  the exact cert-manager v1.21.0 dependency that chart pulls in — no
+  upstream-published "cert-manager-crds-only" chart exists the way
+  gateway-crds-helm/prometheus-operator-crds do, so this repo carries a
+  static, version-pinned copy of the 6 CRD manifests instead of a real
+  Helm dependency. `crds.enabled: false` was set on the controller chart's
+  own values-scaleway.yaml so it no longer installs a competing copy.
+  Re-vendor these files whenever services/platform/cert-manager/chart's
+  own cert-manager dependency version bumps.
+type: application
+version: 0.1.0

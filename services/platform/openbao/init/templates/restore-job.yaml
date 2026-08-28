@@ -30,6 +30,24 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      # Copies a kubectl binary onto a shared volume for the main container --
+      # openbao-snapshot-agent (bao + s3cmd only) has no Kubernetes API client
+      # of its own, and restore.sh now needs one (see that script's own
+      # comment on the openbao-restore-state marker Secret). Same
+      # alpine/kubectl image already used elsewhere in this repo for
+      # in-cluster kubectl access (10-cluster/scaleway's
+      # wait-argocd-apps-healthy module), not a new dependency.
+      initContainers:
+        - name: copy-kubectl
+          image: alpine/kubectl:1.35.3
+          command: ["sh", "-c", "cp \"$(command -v kubectl)\" /shared/kubectl"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: shared
+              mountPath: /shared
       containers:
         - name: restore
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -65,10 +83,14 @@ spec:
               mountPath: /scripts
             - name: tmp
               mountPath: /tmp
+            - name: shared
+              mountPath: /shared
       volumes:
         - name: scripts
           configMap:
             name: openbao-init-restore
         - name: tmp
+          emptyDir: {}
+        - name: shared
           emptyDir: {}
 {{- end }}

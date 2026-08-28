@@ -1,0 +1,9 @@
+apiVersion: v2
+name: crds
+description: Gateway API + Envoy Gateway CRDs, split into their own earlier-wave Application so ArgoCD's CRD health check gates envoy-gateway and cert-manager equally instead of them racing each other for it
+type: application
+version: 0.1.0
+dependencies:
+  - name: gateway-crds-helm
+    version: v1.8.1
+    repository: "oci://registry-1.docker.io/envoyproxy"

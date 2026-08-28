@@ -1,17 +1,14 @@
-{{- if .Values.grafanaRestore.enabled }}
 # Role/RoleBinding live in the `velero` namespace (where backups/restores
 # actually are), not this chart's own `monitoring` namespace — mirrors
-# services/platform/gateway/config/templates/cert-restore-rbac.yaml exactly,
-# same reasoning (a RoleBinding only needs its own namespace to match the
-# Role; the ServiceAccount it binds can live anywhere).
+# services/platform/gateway/cert-restore/templates/rbac.yaml exactly, same
+# reasoning (a RoleBinding only needs its own namespace to match the Role;
+# the ServiceAccount it binds can live anywhere).
+{{- if .Values.enabled }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: grafana-restore
   namespace: velero
-  annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-weight: "0"
 rules:
   - apiGroups: ["velero.io"]
     resources: ["backups"]
@@ -25,9 +22,6 @@ kind: RoleBinding
 metadata:
   name: grafana-restore
   namespace: velero
-  annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-weight: "0"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

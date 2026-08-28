@@ -12,6 +12,24 @@ description: >-
   Workflows/CronWorkflows created by
   services/platform/argo-workflows/terraform-apply can actually be
   inspected and manipulated by hand, not just triggered on a schedule.
+
+  CRDs: deliberately NOT split into the shared crds-apps domain the way
+  Gateway API/kube-prometheus-stack/cert-manager/external-secrets/velero's
+  CRDs are (infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-crds.yaml). This chart's vendored
+  argo-workflows dependency installs its CRDs via a Helm hook Job
+  (templates/crds-install-job.yaml, applying the raw manifests under
+  files/crds/minimal/) rather than a plain template or a native crds/
+  folder -- a workaround for these CRDs exceeding the size Kubernetes
+  allows for a plain kubectl-apply-style last-applied-configuration
+  annotation, not a mechanism this repo's other CRD-only charts can
+  trivially mirror. There is no active cross-release race to fix here: the
+  Job runs pre-controller, ordered by its own hook weight, entirely within
+  this one Application's own sync -- the same "confirmed no cross-release
+  race" finding infra#100 made for this exact case. Extracting it would
+  mean vendoring a Job-based installer for a purely hygienic win, not a bug
+  fix -- a deliberate, named exception, not a silent gap. Revisit only if a
+  real race is ever observed live.
 type: application
 version: 0.1.0
 
