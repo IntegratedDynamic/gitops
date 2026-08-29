@@ -62,16 +62,32 @@ data:
     #      safe and necessary to resume, reusing that saved root token
     #      (still valid: OpenBao only ever generates root tokens without an
     #      expiry by default, and nothing else could have consumed it).
-    #    - no marker at all + already initialized: no evidence either way
-    #      (e.g. a cluster from before this marker mechanism existed) --
-    #      falls back to the original safe default of leaving it alone.
+    #    - complete=false + NO saved token + already initialized: a prior
+    #      attempt claimed the restore (wrote the marker) and then ran
+    #      `bao operator init` but was killed in the sub-second window
+    #      before it could persist the resulting root token. OpenBao is now
+    #      initialized-but-empty and nobody holds a usable root token --
+    #      the script can neither re-init nor authenticate. Fail LOUDLY
+    #      with the fix (wipe the raft PVC + pod, then retry) rather than
+    #      the old silent "assume legitimate, skip", which left every auth
+    #      method and secret permanently empty for the boot (ESO then 403s
+    #      on every login and wait-secrets-healthy times out ~30 min later
+    #      with an opaque error -- confirmed live 2026-08-29).
+    #    - no marker at all + already initialized: genuinely a legitimately
+    #      restored, live instance. This script now always writes the
+    #      marker BEFORE it initializes anything (step 4), so our own code
+    #      path can no longer produce "initialized + no marker" -- it only
+    #      happens on a real restored cluster (or a manually deleted
+    #      marker). Safe to leave alone.
     marker_field() {
       $KC get secret "$MARKER" -o "jsonpath={.data.$1}" 2>/dev/null | base64 -d 2>/dev/null || true
     }
 
+    MARKER_EXISTS=false
     MARKER_COMPLETE=""
     MARKER_TOKEN=""
     if $KC get secret "$MARKER" >/dev/null 2>&1; then
+      MARKER_EXISTS=true
       MARKER_COMPLETE=$(marker_field complete)
       MARKER_TOKEN=$(marker_field token)
     fi
@@ -87,8 +103,15 @@ data:
         echo "OpenBao already initialized, but the marker shows a prior restore attempt never finished — resuming with the saved token instead of skipping."
         export BAO_TOKEN="$MARKER_TOKEN"
         RESUMING=true
+      elif [ "$MARKER_EXISTS" = "true" ]; then
+        NS=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || echo openbao)
+        echo "ERROR: a prior restore attempt claimed the marker and ran 'bao operator init', but was killed before it could save the root token. OpenBao is initialized but empty, and no usable root token exists — this Job cannot recover it. Wipe the raft storage so a retry starts clean:"
+        echo "  kubectl delete pvc data-openbao-0 -n $NS"
+        echo "  kubectl delete pod openbao-0 -n $NS"
+        echo "(the Job then re-runs automatically, or: kubectl delete job openbao-init-restore -n $NS && argocd app sync openbao-init)"
+        exit 1
       else
-        echo "OpenBao already initialized and no interrupted-restore marker found — assuming a legitimately restored, live instance. Nothing to do."
+        echo "OpenBao already initialized and no restore marker at all — a legitimately restored, live instance (this script always writes the marker before it initializes anything). Nothing to do."
         exit 0
       fi
     fi
@@ -106,34 +129,33 @@ data:
       # 4. Throwaway init: works on empty storage and yields a root token valid
       #    long enough to perform the restore. The restore replaces all storage
       #    (auth, policies, secrets) so this token becomes void afterwards — by
-      #    design. Persisted to the marker Secret BEFORE attempting the restore
-      #    below, so an interruption from this point on is recoverable by a
-      #    retry instead of silently skipping forever (see step 2's comment).
+      #    design.
       #
+      # CLAIM THE MARKER BEFORE `bao operator init`, not after. The whole
+      # point of the marker is to make an interrupted attempt recoverable
+      # instead of a silent permanent skip -- but writing it *after* init
+      # left a window (init done, pod killed before the marker write) that
+      # produced exactly the state step 2's guard treats as "legitimately
+      # restored, skip". Confirmed live 2026-08-29: a fresh cluster where a
+      # first attempt initialized OpenBao then died; the retry saw
+      # "initialized + no marker" and skipped, leaving every auth method
+      # and secret empty for the boot (ESO 403 on every login,
+      # wait-secrets-healthy failing the whole apply ~30 min later). With
+      # the marker written first, "initialized + no marker" is no longer
+      # reachable from our own code path -- a retry after a mid-init kill
+      # now finds "initialized + marker, no token" and fails loudly with
+      # the wipe-and-retry fix instead (step 2).
+      $KC create secret generic "$MARKER" --from-literal=complete=false \
+        --dry-run=client -o yaml | $KC apply -f -
+
       # Confirmed live (2026-08-27): this used to pipe straight into grep/awk
       # (`bao operator init | grep ... | awk ...`), which under plain `sh`'s
       # `set -e` only checks the LAST command in a pipeline's exit code, not
       # `bao operator init`'s own -- `pipefail` is a bash-ism this script's
-      # `#!/usr/bin/env sh` shebang doesn't get. When step 2's `-status`
-      # check raced OpenBao becoming initialized moments earlier (by
-      # whatever legitimately initialized it before this attempt even
-      # started) and returned a false "not yet initialized" reading, this
-      # `bao operator init` call itself failed with "Vault is already
-      # initialized" -- but the pipeline still reported success (grep found
-      # no match, awk ran on empty input and exited 0), so $ROOT silently
-      # became an empty string, got exported as BAO_TOKEN, written into the
-      # marker as a real-looking-but-useless value, and the restore call
-      # below went out completely unauthenticated -- guaranteed 403. Worse,
-      # a RETRY then read that empty-token marker, saw `-n "$MARKER_TOKEN"`
-      # as false, and fell into step 2's "no marker found, assume
-      # legitimate, skip" branch -- silently reproducing the original bug
-      # through a different path. Capturing the command's own output AND
-      # exit code directly (no pipe) fixes the exit-code blind spot, and
-      # this now fails loudly (exit 1, marker left untouched) instead of
-      # limping forward with an empty token -- a Job retry re-evaluates
-      # step 2 fresh rather than inheriting a poisoned marker.
+      # `#!/usr/bin/env sh` shebang doesn't get. Capturing the command's own
+      # output AND exit code directly (no pipe) fixes that blind spot.
       INIT_OUTPUT=$(bao operator init 2>&1) || {
-        echo "bao operator init failed -- OpenBao is likely already initialized by whatever won a race against our own -status check above. Aborting without touching the marker or attempting a restore with no valid credentials; a retry will re-check state fresh."
+        echo "bao operator init failed -- OpenBao is already initialized, i.e. a prior attempt of this Job initialized it (nothing else does). The {complete=false} marker written just above carries no token, so a retry takes step 2's loud 'wipe the PVC and retry' path rather than silently skipping."
         echo "$INIT_OUTPUT"
         exit 1
       }
@@ -144,6 +166,10 @@ data:
         exit 1
       fi
       export BAO_TOKEN="$ROOT"
+      # Persist the token onto the marker immediately (same idempotent apply
+      # idiom). A kill between `bao operator init` and this line leaves the
+      # {complete=false, no token} marker -> loud "wipe and retry", not a
+      # silent skip.
       $KC create secret generic "$MARKER" \
         --from-literal=token="$BAO_TOKEN" --from-literal=complete=false \
         --dry-run=client -o yaml | $KC apply -f -
