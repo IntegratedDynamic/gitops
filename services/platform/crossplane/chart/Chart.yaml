@@ -1,0 +1,27 @@
+apiVersion: v2
+name: crossplane
+description: >-
+  Vendor Crossplane core PLUS the provider-opentofu Provider +
+  DeploymentRuntimeConfig + scoped RBAC (templates/provider.yaml), managed
+  as an Application by the infrastructure repo's
+  10-cluster/scaleway/platform-apps/values-crossplane.yaml (issue #101 —
+  replaces services/platform/argo-workflows/terraform-apply). Crossplane's
+  own reconcile loop drives `tofu apply` for 11-secrets/openbao/managed and
+  12-monitoring/grafana/{bootstrap,managed} through the provider-opentofu
+  Workspaces declared in the sibling `config` chart — no cron, no clone
+  step, no one-shot PostSync hook. Consumes no OpenBao-sourced Secret
+  itself; it is wave 0 of the crossplane domain. The Provider lives here,
+  not in `config`, so this Application reaching Healthy already means the
+  opentofu.upbound.io CRDs are registered — `config` (ProviderConfig +
+  Workspaces) is wave 1, gated on that.
+
+  Crossplane 1.20.x on purpose, not 2.x: the Workspaces use the
+  cluster-scoped opentofu.upbound.io/v1beta1 API, which is the 1.x default
+  and only a compatibility shim under 2.x.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: crossplane
+    version: 1.20.12
+    repository: "https://charts.crossplane.io/stable"
