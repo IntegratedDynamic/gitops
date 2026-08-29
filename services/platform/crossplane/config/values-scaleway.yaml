@@ -13,14 +13,16 @@ namespace: crossplane-system
 gitRef: main
 infraRepo: https://github.com/IntegratedDynamic/infrastructure.git
 
-# ── ESO: the two Secrets the Workspaces read as env vars ──────────────────
-# Both KV entries are Terraform-managed in the infra repo
-# (11-secrets/openbao/managed/main.tf —
-# vault_kv_secret_v2.argo_workflows_scaleway_state_credentials /
-# .argo_workflows_openbao_managed_tfvars). OpenBao stays the source of
-# truth; no credential value lives in this repo. Moved here from
-# services/platform/argo-workflows/secret (issue #101) and retargeted to
-# this namespace — the same KV paths, a new target Secret name.
+# ── ESO: the Secrets the Workspaces read as env vars ─────────────────────
+# Every KV entry is Terraform-managed in the infra repo
+# (11-secrets/openbao/managed/main.tf — the argo_workflows_* KV resources
+# for state creds + openbao-managed tfvars; random_password.grafana_admin_password
+# → vault_kv_secret_v2.grafana_admin for the Grafana admin credential).
+# OpenBao stays the source of truth; no credential value lives in this repo.
+# state creds + openbao-managed tfvars were moved here from
+# services/platform/argo-workflows/secret (issue #101); grafana-admin was
+# added when 12-monitoring/grafana/bootstrap was collapsed and
+# grafana-managed switched to admin basic-auth.
 clusterSecretStoreName: openbao
 refreshInterval: 1h
 
@@ -30,6 +32,9 @@ stateCredentials:
 openbaoManagedTfvars:
   openbaoPath: apps/argo-workflows/openbao-managed-tfvars
   secretName: crossplane-openbao-managed-tfvars
+grafanaAdmin:
+  openbaoPath: apps/grafana/admin
+  secretName: crossplane-grafana-admin
 
 # ── Per-root Workspace parameters ────────────────────────────────────────
 # externalName == the root's EXISTING OpenTofu workspace name, so
@@ -45,10 +50,6 @@ workspaces:
     externalName: 11-secrets-openbao-managed-dev
     entrypoint: 11-secrets/openbao/managed
     vaultAddress: http://openbao.openbao.svc:8200/
-  grafanaBootstrap:
-    externalName: 12-monitoring-grafana-bootstrap-dev
-    entrypoint: 12-monitoring/grafana/bootstrap
-    grafanaUrl: http://grafana.monitoring.svc:80/
   grafanaManaged:
     externalName: 12-monitoring-grafana-managed-dev
     entrypoint: 12-monitoring/grafana/managed
