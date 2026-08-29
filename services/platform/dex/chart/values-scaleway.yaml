@@ -1,8 +1,28 @@
 # The identity broker: turns GitHub's org-restricted OAuth into a standard
 # OIDC provider that Envoy Gateway's native SecurityPolicy.oidc can talk to
 # directly (GitHub itself has no discovery/JWKS/id_token — Dex bridges that
-# gap). Single replica, in-memory storage — no HA on Scaleway, consistent
-# with the rest of this cluster.
+# gap). Single replica — no HA on Scaleway, consistent with the rest of this
+# cluster.
+#
+# storage.type: kubernetes (was `memory`). Dex's OIDC signing keys are part
+# of its storage; with `memory` they are regenerated on every pod restart,
+# which silently invalidates every already-issued id_token platform-wide —
+# argocd-server / Grafana / OpenBao keep a stale JWKS cached and start
+# rejecting valid logins with "failed to verify id token signature" until
+# each is itself restarted. Confirmed live 2026-08-29 (a restored homelab:
+# reconcile OpenBao -> restart Dex to pick up rotated client secrets -> every
+# OIDC RP broke). `kubernetes` storage persists the signing keys (and all
+# other Dex state) in `dex.coreos.com` CRDs, so a Dex restart no longer
+# rotates them. The chart's default RBAC already covers it
+# (rbac.create + rbac.createClusterScoped, both true — a namespaced Role on
+# dex.coreos.com/* plus a ClusterRole letting Dex create its own CRDs on
+# first boot). Still single-replica; the CRD-backed store tolerates the
+# brief 2-pod overlap of a rolling update.
+#
+# NOT fixed here: client secrets (staticClients' secretEnv) are still read
+# from `dex-credentials` at pod start, so a rotation of those still needs a
+# manual `kubectl rollout restart deploy/dex` (+ the RPs). That half wants a
+# secret-reloader — its own follow-up.
 #
 # staticClients.envoy-gateway is the one OAuth2 client every protected app's
 # SecurityPolicy authenticates against (see services/products/demo/chart/templates/securitypolicy.yaml).
@@ -54,7 +74,11 @@ dex:
     issuer: https://auth.scalepack.fr
 
     storage:
-      type: memory
+      # See this file's header comment — `memory` rotates the OIDC signing
+      # keys on every Dex restart and breaks every RP's cached JWKS.
+      type: kubernetes
+      config:
+        inCluster: true
 
     # GitHub is the only login method — no local username/password DB.
     enablePasswordDB: false
