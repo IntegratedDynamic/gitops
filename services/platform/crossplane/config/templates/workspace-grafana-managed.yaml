@@ -1,12 +1,16 @@
 # 12-monitoring/grafana/managed — Grafana-as-code (MCP service account,
 # prometheus/loki/tempo data sources, the default dashboards). Replaces the
-# terraform-apply-grafana-managed CronWorkflow (issue #101). It reads
-# grafana/bootstrap's service_account_token via terraform_remote_state, so
-# Crossplane's own backoff is what sequences it after grafana-bootstrap —
-# no explicit ordering primitive needed (a plus over the CronWorkflow's
-# 10-minutes-apart cron offset). The infra#82 datasource-uid self-heal that
-# used to live in this CronWorkflow's preflightScript is now folded into the
-# root itself (pinned uids — see 12-monitoring/grafana/managed/main.tf).
+# terraform-apply-grafana-managed CronWorkflow (issue #101). Its grafana
+# provider authenticates directly as Grafana's admin (basic auth) — there
+# is no separate grafana-bootstrap Workspace anymore (its minted
+# service-account token could stop authenticating after a Velero restore,
+# infra#82 mode 1). The admin password comes in as TF_VAR_grafana_admin_password
+# from the crossplane-grafana-admin ESO Secret (externalsecret-grafana-admin.yaml),
+# not a cross-root state read — so there's nothing to sequence against
+# openbao-managed; the Workspace just needs Grafana reachable, which the
+# infra crossplane-apps tier's wait_grafana_healthy gate ensures.
+# infra#82 restore drift is handled inside the root itself (pinned data-source
+# uids + config-driven `import` blocks — see 12-monitoring/grafana/managed/main.tf).
 apiVersion: opentofu.upbound.io/v1beta1
 kind: Workspace
 metadata:
@@ -37,5 +41,12 @@ spec:
       {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
       - name: TF_VAR_grafana_url
         value: {{ .Values.workspaces.grafanaManaged.grafanaUrl | quote }}
+      # Grafana admin password — basic auth for the grafana provider AND the
+      # infra#82 restore-adopt probes (data.http, admin-authed).
+      - name: TF_VAR_grafana_admin_password
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.grafanaAdmin.secretName }}
+          key: admin-password
   providerConfigRef:
     name: default
