@@ -1,0 +1,80 @@
+namespace: crossplane-system
+
+# ── provider-opentofu package (templates/provider.yaml) ────────────────────
+# Lives WITH Crossplane core, not in the sibling `config` chart, so that
+# crossplane-core reaching Healthy already means the opentofu.upbound.io
+# CRDs are registered -- config/ (ProviderConfig + Workspaces) is wave 1,
+# gated on that. Confirmed live 2026-08-29: with the Provider in config/,
+# ArgoCD's first sync of that app failed the whole batch on the not-yet-
+# existing Workspace CRD and thrashed through retries before anything
+# applied.
+provider:
+  name: provider-opentofu
+  # crossplane-contrib/provider-terraform is frozen at Terraform 1.5.7 and
+  # can't `init` these roots (hashicorp/vault 5.x, grafana/grafana ~> 4.0) --
+  # the reason issue #102 (repo -> OpenTofu) had to land first.
+  # provider-opentofu v1.1.7 bundles OpenTofu 1.10.8, alpine + git/curl,
+  # no jq (hence the jq -> printf change in the infra roots).
+  package: xpkg.upbound.io/upbound/provider-opentofu:v1.1.7
+  # Each reconcile runs `tofu init` + plan/apply, loading aws (state
+  # backend) + grafana + vault + http + external + random. First-pass
+  # sizing -- tune against `kubectl top pod -n crossplane-system`.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# Values nest under `crossplane:` because this is a thin wrapper declaring
+# the real chart as a dependency (see chart/Chart.yaml) — Helm only exposes
+# a subchart's values under its dependency name.
+crossplane:
+  replicas: 1
+
+  # No package installs via the chart itself — the provider-opentofu
+  # Provider is a declared manifest (templates/provider.yaml) so ArgoCD
+  # tracks its sync/health, not an opaque chart side effect.
+  provider:
+    packages: []
+  configuration:
+    packages: []
+  function:
+    packages: []
+
+  # Small node pool (DEV1-M, ~4Gi) — see the infrastructure repo's
+  # 10-cluster/scaleway/argocd.tf resource-sizing comments for the same
+  # discipline applied platform-wide. Trimmed from the chart's own 1024Mi
+  # core limit; first-pass figures, tune against `kubectl top pod -n
+  # crossplane-system` after H1.
+  resourcesCrossplane:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  rbacManager:
+    deploy: true
+    replicas: 1
+
+  resourcesRBACManager:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+  # Package cache is an emptyDir by default; bump the size limit so
+  # provider-opentofu's package layer (it bundles the tofu binary) fits.
+  packageCache:
+    sizeLimit: 512Mi
+
+  # Prometheus scrape annotations on the core + RBAC-manager pods. Alloy
+  # (services/platform/monitoring/alloy-chart) already tails every pod's
+  # logs; this exposes the controller's own metrics too.
+  metrics:
+    enabled: true

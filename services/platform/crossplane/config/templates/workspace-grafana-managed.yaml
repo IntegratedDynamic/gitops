@@ -1,0 +1,41 @@
+# 12-monitoring/grafana/managed — Grafana-as-code (MCP service account,
+# prometheus/loki/tempo data sources, the default dashboards). Replaces the
+# terraform-apply-grafana-managed CronWorkflow (issue #101). It reads
+# grafana/bootstrap's service_account_token via terraform_remote_state, so
+# Crossplane's own backoff is what sequences it after grafana-bootstrap —
+# no explicit ordering primitive needed (a plus over the CronWorkflow's
+# 10-minutes-apart cron offset). The infra#82 datasource-uid self-heal that
+# used to live in this CronWorkflow's preflightScript is now folded into the
+# root itself (pinned uids — see 12-monitoring/grafana/managed/main.tf).
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: grafana-managed
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # See providerconfig.yaml -- Workspace CRD ships in wave 0's Provider package.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    crossplane.io/external-name: {{ .Values.workspaces.grafanaManaged.externalName }}
+spec:
+  deletionPolicy: Orphan
+  managementPolicies: ["Observe", "Create", "Update"]
+  forProvider:
+    # Surface the full `tofu init/plan/apply` CLI output in the
+    # provider-opentofu pod logs (kubectl -n crossplane-system logs
+    # deploy/provider-opentofu, and Loki via Alloy) -- the closest thing to
+    # the retired CronWorkflow`s per-run pod logs.
+    enableTofuCLILogging: true
+    source: Remote
+    module: git::{{ .Values.infraRepo }}?ref={{ .Values.gitRef }}
+    entrypoint: {{ .Values.workspaces.grafanaManaged.entrypoint }}
+    remotePullPolicy: Always
+    planArgs:
+      - -var-file=env/{{ .Values.workspaces.grafanaManaged.externalName }}.tfvars
+    applyArgs:
+      - -var-file=env/{{ .Values.workspaces.grafanaManaged.externalName }}.tfvars
+    env:
+      {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
+      - name: TF_VAR_grafana_url
+        value: {{ .Values.workspaces.grafanaManaged.grafanaUrl | quote }}
+  providerConfigRef:
+    name: default

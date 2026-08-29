@@ -52,7 +52,8 @@ chart (`wireguard-secret`, `dex-secret`, `grafana-secret`,
 `grafana`, `wireguard-config`, every remaining `*-gateway` chart
 (`dex-gateway`, `argocd-config-gateway`, `openbao-gateway`,
 `argo-workflows-gateway`, `grafana-gateway`), `argocd-config`, and
-`terraform-apply` — moved to the infra repo's `platform-apps/` chart too.
+`terraform-apply` (since replaced by `crossplane`, infra#101) — moved to
+the infra repo's `platform-apps/` chart too.
 `demo` is the only app left in this file: everything else in this repo's
 `services/platform/` turned out to be platform-level infra, not
 product-level, once looked at properly (per the issue's own scope-extension
@@ -351,6 +352,11 @@ dependency" logic as wave 4's own history. No `syncWaveLabelPaths` here
 (`values-scaleway.yaml`'s own comment on `podLabels` explains why: the
 inject-via-Helm-parameter mechanism every other app here uses produced a
 live-broken manifest for this specific chart).
+
+<!-- historical: `terraform-apply` below was replaced wholesale by Crossplane
+     + provider-opentofu (infra#101). It no longer exists as a chart or a
+     wave; the wave-6 reasoning here is kept only as the record of why the
+     CronWorkflow approach was placed where it was. -->
 
 ## Wave 6 — wireguard-config, dex-gateway, terraform-apply
 

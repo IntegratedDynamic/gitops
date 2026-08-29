@@ -1,0 +1,66 @@
+# provider-opentofu package + its runtime config.
+#
+# The Helm resources of the vendored `crossplane` subchart carry no
+# sync-wave (so: wave 0). Crossplane installs the pkg.crossplane.io CRDs
+# (Provider, DeploymentRuntimeConfig, ...) itself once its core pod is
+# running -- they are NOT static manifests in the chart. So:
+#  - Provider + DeploymentRuntimeConfig are sync-wave "1": ArgoCD applies
+#    the wave-0 crossplane Deployment, waits for it Healthy (pod up, CRDs
+#    registered), THEN applies these.
+#  - SkipDryRunOnMissingResource on both: ArgoCD dry-runs the WHOLE
+#    manifest set before applying wave 0, and a pkg.crossplane.io/* kind it
+#    can't resolve otherwise aborts the entire sync -- so wave 0 would never
+#    run and the CRDs would never appear (confirmed live 2026-08-29).
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: {{ .Values.provider.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  package: {{ .Values.provider.package }}
+  # Pull the exact digest behind the tag once, then stop re-resolving —
+  # this is a reconcile engine, not something that should float.
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 1
+  runtimeConfigRef:
+    name: {{ .Values.provider.name }}
+---
+# Sizes the provider runtime pod (it shells out to `tofu`) and pins its
+# ServiceAccount name (deterministic, rather than revision-hashed).
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: {{ .Values.provider.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: {{ .Values.provider.name }}
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              resources:
+                {{- toYaml .Values.provider.resources | nindent 16 }}
+# NOTE on the provider ServiceAccount's secret access (issue #101 watch-out
+# "RBAC scoped to what it needs"): Crossplane's rbac-manager auto-generates
+# `ClusterRole crossplane:provider:<revision>:system` for every provider and
+# grants it `verbs: ["*"]` on `secrets`/`configmaps` CLUSTER-WIDE (confirmed
+# live 2026-08-29 -- identical to crossplane-contrib/provider-terraform).
+# That is not narrowable without `rbacManager.deploy: false` + hand-writing
+# RBAC for every CRD the provider manages -- not worth it here. A hand-added
+# namespaced Role would be pure dead weight (the ClusterRole supersedes it),
+# so there isn't one. The grant is accepted, with these compensating
+# controls: every Workspace's `env[].secretKeyRef` targets crossplane-system
+# only; `deletionPolicy: Orphan` + `managementPolicies` without `Delete` (see
+# config/) means the provider never runs `tofu destroy`; and the provider
+# only executes `tofu` -- it has no reconcile logic of its own that touches
+# cluster Secrets beyond resolving the refs a Workspace spec names.

@@ -1,0 +1,30 @@
+# Deliberately empty spec: inject NOTHING into the workspaces.
+#
+# Every target root already carries its own `backend "s3"` block (Scaleway,
+# native S3 locking — see the infra repo's 00-foundation/scaleway/README.md)
+# and its own `provider "vault"` / `provider "grafana"` / `provider "aws"`
+# blocks. provider-opentofu doesn't require a ProviderConfig to define a
+# backend — the module's own satisfies its "modules must use remote state"
+# rule — so a `configuration:` here would only risk a duplicate backend
+# block and a second, conflicting provider definition. Credentials reach
+# `tofu` as env vars set per-Workspace (see each workspace-*.yaml), not
+# through this ProviderConfig.
+#
+# pluginCache defaults to true (kept): caches the aws/grafana/vault/http/
+# external/random plugins across reconciles instead of re-downloading every
+# poll.
+apiVersion: opentofu.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # opentofu.upbound.io/* CRDs ship in the provider-opentofu PACKAGE, not
+    # the Crossplane core chart -- on a first sync they don't exist until
+    # wave 0's Provider becomes Healthy. Without this, ArgoCD's pre-sync
+    # dry-run fails validation on the whole batch ("no matches for kind
+    # ProviderConfig/Workspace") and never applies wave 0 either -> deadlock
+    # (confirmed live 2026-08-29). SkipDryRunOnMissingResource defers the
+    # dry-run until the kind is actually registered.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec: {}

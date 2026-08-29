@@ -30,7 +30,8 @@ repoURL: https://github.com/IntegratedDynamic/gitops.git
 # Terraform-created top-level Applications (secrets-apps, eso-data-apps,
 # monitoring-apps, backups-apps, networking-apps, wireguard-apps, dex-apps,
 # argocd-config-apps, grafana-apps, argo-workflows-apps,
-# terraform-apply-apps), wired into a real dependency DAG via Terraform
+# crossplane-apps -- the last renamed from terraform-apply-apps, infra#101),
+# wired into a real dependency DAG via Terraform
 # depends_on + health-wait gates (see that chart's README.md). `demo` is
 # the only app left here on purpose: it's a product, not platform, so it
 # stays gitops-native, still gated on the whole platform DAG being Healthy

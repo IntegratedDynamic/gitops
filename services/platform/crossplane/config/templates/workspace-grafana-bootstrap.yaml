@@ -1,0 +1,42 @@
+# 12-monitoring/grafana/bootstrap — mints the `terraform` Grafana service
+# account + token everything else authenticates as. Replaces the
+# terraform-apply-grafana-bootstrap CronWorkflow (issue #101). The infra#82
+# token self-heal that used to live in this CronWorkflow's preflightScript
+# is now folded into the root itself (data.http admin probe +
+# replace_triggered_by — see 12-monitoring/grafana/bootstrap/main.tf), so no
+# pre-apply hook is needed here.
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: grafana-bootstrap
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # See providerconfig.yaml -- Workspace CRD ships in wave 0's Provider package.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    crossplane.io/external-name: {{ .Values.workspaces.grafanaBootstrap.externalName }}
+spec:
+  deletionPolicy: Orphan
+  managementPolicies: ["Observe", "Create", "Update"]
+  forProvider:
+    # Surface the full `tofu init/plan/apply` CLI output in the
+    # provider-opentofu pod logs (kubectl -n crossplane-system logs
+    # deploy/provider-opentofu, and Loki via Alloy) -- the closest thing to
+    # the retired CronWorkflow`s per-run pod logs.
+    enableTofuCLILogging: true
+    source: Remote
+    module: git::{{ .Values.infraRepo }}?ref={{ .Values.gitRef }}
+    entrypoint: {{ .Values.workspaces.grafanaBootstrap.entrypoint }}
+    remotePullPolicy: Always
+    planArgs:
+      - -var-file=env/{{ .Values.workspaces.grafanaBootstrap.externalName }}.tfvars
+    applyArgs:
+      - -var-file=env/{{ .Values.workspaces.grafanaBootstrap.externalName }}.tfvars
+    env:
+      {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
+      # grafana provider (admin basic-auth) + the folded-in http self-heal
+      # probe both target this. Explicit for the same reason as
+      # openbao-managed's vault_address.
+      - name: TF_VAR_grafana_url
+        value: {{ .Values.workspaces.grafanaBootstrap.grafanaUrl | quote }}
+  providerConfigRef:
+    name: default

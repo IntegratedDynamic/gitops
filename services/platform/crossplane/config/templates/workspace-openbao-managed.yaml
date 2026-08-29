@@ -1,0 +1,67 @@
+# 11-secrets/openbao/managed — OpenBao's own structure + secret content,
+# reconciled against infra HEAD. Replaces the terraform-apply-openbao-managed
+# CronWorkflow (issue #101). The vault provider talks to OpenBao's in-cluster
+# Service directly — no tunnel, no public route.
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: openbao-managed
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # The Workspace CRD ships in the provider-opentofu package (wave 0's
+    # Provider), absent on a first sync -- see providerconfig.yaml's comment.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    # == the root's EXISTING OpenTofu workspace name, so `tofu workspace
+    # select` lands on the same Scaleway S3 state key that exists today.
+    crossplane.io/external-name: {{ .Values.workspaces.openbaoManaged.externalName }}
+spec:
+  # A bad apply here can lock out cluster secrets (this root's README) — so
+  # Crossplane observes/creates/updates only, never `tofu destroy`, and
+  # orphans the tofu-managed objects if this CR is ever pruned. Mirrors the
+  # OpenBao `terraform` AppRole already having no `delete`.
+  deletionPolicy: Orphan
+  managementPolicies: ["Observe", "Create", "Update"]
+  forProvider:
+    # Surface the full `tofu init/plan/apply` CLI output in the
+    # provider-opentofu pod logs (kubectl -n crossplane-system logs
+    # deploy/provider-opentofu, and Loki via Alloy) -- the closest thing to
+    # the retired CronWorkflow`s per-run pod logs.
+    enableTofuCLILogging: true
+    source: Remote
+    module: git::{{ .Values.infraRepo }}?ref={{ .Values.gitRef }}
+    entrypoint: {{ .Values.workspaces.openbaoManaged.entrypoint }}
+    # Re-pull the branch every reconcile — this IS the "has main moved,
+    # re-apply if so" engine the CronWorkflow used to be.
+    remotePullPolicy: Always
+    planArgs:
+      - -var-file=env/{{ .Values.workspaces.openbaoManaged.externalName }}.tfvars
+    applyArgs:
+      - -var-file=env/{{ .Values.workspaces.openbaoManaged.externalName }}.tfvars
+    env:
+      {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
+      # Redundant with the root's own version.tf default, kept explicit for
+      # the same reason the CronWorkflow did — the whole point of an
+      # in-cluster reconcile is that the public route isn't reliably
+      # reachable from a pod, so this can't lean on that default.
+      - name: TF_VAR_vault_address
+        value: {{ .Values.workspaces.openbaoManaged.vaultAddress | quote }}
+      # The three required, no-default vars — admin-supplied, JSON-encoded
+      # on the infra side, from OpenBao KV via ESO (see
+      # externalsecret-openbao-managed-tfvars.yaml).
+      - name: TF_VAR_dex_github_connector
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.openbaoManagedTfvars.secretName }}
+          key: TF_VAR_dex_github_connector
+      - name: TF_VAR_secrets_sync_github_eso_private_key
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.openbaoManagedTfvars.secretName }}
+          key: TF_VAR_secrets_sync_github_eso_private_key
+      - name: TF_VAR_secrets_sync_github
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.openbaoManagedTfvars.secretName }}
+          key: TF_VAR_secrets_sync_github
+  providerConfigRef:
+    name: default

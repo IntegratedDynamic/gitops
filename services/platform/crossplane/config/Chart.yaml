@@ -1,0 +1,14 @@
+apiVersion: v2
+name: crossplane-config
+description: >-
+  The opentofu.upbound.io ProviderConfig + the three Workspace CRs that
+  reconcile 11-secrets/openbao/managed and
+  12-monitoring/grafana/{bootstrap,managed} against infrastructure-repo
+  HEAD, plus the two ESO ExternalSecrets feeding them Scaleway state
+  credentials + openbao/managed's extra tfvars. Issue #101 — replaces
+  services/platform/argo-workflows/terraform-apply. Wave 1 of the crossplane
+  domain: needs the sibling `chart` (Crossplane core AND the
+  provider-opentofu Provider) Healthy first, so the opentofu.upbound.io
+  CRDs these manifests use already exist.
+type: application
+version: 0.1.0

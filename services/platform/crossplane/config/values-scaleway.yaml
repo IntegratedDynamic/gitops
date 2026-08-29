@@ -1,0 +1,55 @@
+namespace: crossplane-system
+
+# The provider-opentofu Provider + its DeploymentRuntimeConfig + scoped RBAC
+# live in the sibling `chart` (Crossplane core), NOT here -- so that
+# crossplane-core reaching Healthy already guarantees the
+# opentofu.upbound.io CRDs this chart's ProviderConfig/Workspaces need.
+
+# ── infra-repo ref every Workspace's git module resolves ──────────────────
+# Overridden per-sync by platform-apps' `gitRefParam` (infrastructure repo's
+# 10-cluster/scaleway/platform-apps/values-crossplane.yaml + templates/apps.yaml),
+# so a paired infra/gitops feature-branch pair is testable end to end before
+# merge — same mechanism the retired terraform-apply chart's `gitRef` used.
+gitRef: main
+infraRepo: https://github.com/IntegratedDynamic/infrastructure.git
+
+# ── ESO: the two Secrets the Workspaces read as env vars ──────────────────
+# Both KV entries are Terraform-managed in the infra repo
+# (11-secrets/openbao/managed/main.tf —
+# vault_kv_secret_v2.argo_workflows_scaleway_state_credentials /
+# .argo_workflows_openbao_managed_tfvars). OpenBao stays the source of
+# truth; no credential value lives in this repo. Moved here from
+# services/platform/argo-workflows/secret (issue #101) and retargeted to
+# this namespace — the same KV paths, a new target Secret name.
+clusterSecretStoreName: openbao
+refreshInterval: 1h
+
+stateCredentials:
+  openbaoPath: apps/argo-workflows/scaleway-state-credentials
+  secretName: crossplane-scaleway-state-credentials
+openbaoManagedTfvars:
+  openbaoPath: apps/argo-workflows/openbao-managed-tfvars
+  secretName: crossplane-openbao-managed-tfvars
+
+# ── Per-root Workspace parameters ────────────────────────────────────────
+# externalName == the root's EXISTING OpenTofu workspace name, so
+# `tofu workspace select <externalName>` lands on the same Scaleway S3
+# state key that exists today — no backend change, no state migration.
+# vaultAddress / grafanaUrl mirror each root's own version.tf default;
+# passed explicitly for the same reason the CronWorkflow did — the reason
+# an in-cluster reconcile exists at all is that the public routes aren't
+# reliably reachable from a pod, so this can't lean on the default ever
+# staying put.
+workspaces:
+  openbaoManaged:
+    externalName: 11-secrets-openbao-managed-dev
+    entrypoint: 11-secrets/openbao/managed
+    vaultAddress: http://openbao.openbao.svc:8200/
+  grafanaBootstrap:
+    externalName: 12-monitoring-grafana-bootstrap-dev
+    entrypoint: 12-monitoring/grafana/bootstrap
+    grafanaUrl: http://grafana.monitoring.svc:80/
+  grafanaManaged:
+    externalName: 12-monitoring-grafana-managed-dev
+    entrypoint: 12-monitoring/grafana/managed
+    grafanaUrl: http://grafana.monitoring.svc:80/
