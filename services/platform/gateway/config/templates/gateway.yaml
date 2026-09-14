@@ -23,7 +23,7 @@ spec:
     - name: https
       protocol: HTTPS
       port: 443
-      hostname: {{ .Values.wildcardHostname | quote }}
+      hostname: {{ printf "*.%s" .Values.baseDomain | quote }}
       allowedRoutes:
         namespaces:
           from: All
@@ -37,4 +37,8 @@ spec:
           # backendRefs, otherwise ArgoCD shows permanent OutOfSync.
           - group: ""
             kind: Secret
-            name: {{ .Values.wildcardCertSecretName }}
+            # e.g. "scalepack.fr" -> "scalepack-fr-wildcard-tls" (main's own
+            # unchanged secret name), "pr-123.scalepack.fr" ->
+            # "pr-123-scalepack-fr-wildcard-tls" for an ephemeral cluster —
+            # see values-scaleway.yaml's baseDomain comment.
+            name: {{ printf "%s-wildcard-tls" (.Values.baseDomain | replace "." "-") }}

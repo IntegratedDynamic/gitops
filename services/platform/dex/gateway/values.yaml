@@ -11,7 +11,15 @@ dex:
   serviceName: dex
   servicePort: 5556
 
+# baseDomain: overridden per-cluster by the infra repo's argocd.tf
+# (var.base_domain, this app's baseDomainParam: true in
+# values-networking-resources.yaml) -- main's own workspace keeps this
+# default unchanged, an ephemeral cluster workspace gets its own real
+# subdomain instead. See services/platform/gateway/config/values-scaleway.yaml's
+# baseDomain comment for the full "why".
+baseDomain: scalepack.fr
+
 gateway:
-  hostname: auth.scalepack.fr
+  hostPrefix: auth
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
