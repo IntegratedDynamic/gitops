@@ -5,14 +5,47 @@ metadata:
   name: openbao-init-restore
   namespace: {{ .Release.Namespace }}
   annotations:
-    # Normal resource, wave 1 (after SA + ConfigMap). On a fresh cluster the Job
-    # doesn't exist → OutOfSync → ArgoCD creates and runs it. Re-runs on a live
-    # cluster are prevented by the idempotence guard in restore.sh.
+    # Wave 1 (after SA + ConfigMap). On a fresh cluster the Job doesn't exist
+    # → ArgoCD creates and runs it. Re-runs on a live cluster are prevented
+    # by the idempotence guard in restore.sh.
     argocd.argoproj.io/sync-wave: "1"
-    # A Job's spec.selector/template.labels are immutable — Replace=true alone
-    # still does a plain `kubectl replace` (PUT), which the API server rejects
-    # just the same. Force=true makes ArgoCD delete+recreate instead.
-    argocd.argoproj.io/sync-options: Replace=true,Force=true
+    # hook: Sync (2026-09-14, root-caused live): this used to be a plain
+    # resource with sync-options Replace=true,Force=true (needed because a
+    # Job's spec.selector/template.labels are immutable -- a bare Replace is
+    # still a `kubectl replace` PUT, which the API server rejects the same
+    # as a normal apply; Force=true made ArgoCD delete+recreate instead).
+    # Confirmed live: that delete+recreate isn't gated on the Job having
+    # finished -- on the very first sync of a brand-new cluster, ArgoCD's
+    # own Force=true handling deleted-and-recreated this Job while its
+    # first pod was ALREADY mid-restore (visible as two distinct
+    # "SuccessfulCreate" pod events three seconds apart, and the
+    # Application's own operationState literally logging "job.batch ...
+    # deleted ... replaced" as one sync). The killed pod had already
+    # claimed the openbao-restore-state marker and run `bao operator init`
+    # but hadn't persisted the root token yet -- landing squarely in the
+    # one window restore.sh's marker guard (see that script's own comment)
+    # can't recover from unattended, so it failed loudly (by design) and
+    # needed a manual raft-PVC wipe.
+    #
+    # `hook: Sync` keeps this resource applied in-line with the normal Sync
+    # phase, respecting sync-wave exactly like a plain resource (unlike
+    # PreSync/PostSync, which run entirely before/after every non-hook
+    # resource -- switching to either of those would have broken this
+    # Job's wave-1-after-wave-0 dependency on the SA/RBAC/ConfigMap without
+    # also promoting THEM to hooks). What actually changes is lifecycle
+    # management: `hook-delete-policy: HookSucceeded` deletes the Job the
+    # moment it succeeds, so by the time any later sync runs there is
+    # nothing live to force-replace -- removing the delete+recreate
+    # mechanism (and the Force=true it required) entirely in the steady
+    # state. NEVER omit hook-delete-policy here: ArgoCD's own default is
+    # `BeforeHookCreation`, which is the exact "delete an existing hook
+    # unconditionally before creating a new one" behavior that caused this
+    # incident in the first place -- just under a different name. A Job
+    # that fails (backoffLimit exhausted) is deliberately left in place
+    # (HookSucceeded only deletes on success) for the same manual recovery
+    # this chart already documents (see restore.sh's own error message).
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
 spec:
   backoffLimit: 2
   template:
