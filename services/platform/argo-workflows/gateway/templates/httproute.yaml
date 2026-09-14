@@ -16,7 +16,7 @@ spec:
       namespace: {{ .Values.gateway.gatewayNamespace }}
       sectionName: https
   hostnames:
-    - {{ .Values.gateway.hostname }}
+    - {{ printf "%s.%s" .Values.gateway.hostPrefix .Values.baseDomain }}
   rules:
     - backendRefs:
         - group: ""
