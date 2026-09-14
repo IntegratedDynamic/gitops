@@ -410,17 +410,15 @@ dependency on the shared Gateway at all — same as wireguard-config now,
 above) — it would ride along in the same wave as its sibling anyway for
 simplicity if enabled; nothing forces it any earlier.
 
-terraform-apply: TEMPORARILY moved here from wave 2 (2026-08-20) —
-confirmed live that running it as early as wave 2 fires the
-grafana-bootstrap/grafana-managed CronWorkflows before `grafana` (wave 5)
-has even synced, so every run failed until the cluster's next scheduled
-trigger happened to land after wave 5. Wave 2 only ever guaranteed
-argo-workflows' own CRDs were Established, never that terraform-apply's
-*targets* existed — grafana wasn't a dependency this wave-gating scheme
-accounted for. Wave 6 is a blunt fix (grafana is wave 5, so this now always
-runs after it) — proper per-root dependency/health gating (openbao-managed's
-own dependency is OpenBao itself, wave 0, so it doesn't actually need to
-wait this long) is follow-up work, not done here.
+terraform-apply: REMOVED (issue #101). The hand-rolled Argo Workflows
+CronWorkflows that ran `tofu apply` for openbao-managed and grafana-managed
+were replaced by Crossplane + provider-opentofu `Workspace` CRs
+(`services/platform/crossplane`), driven from the infra repo's
+`crossplane-apps` platform-apps tier with its own per-root health gating
+(`wait_secrets_healthy` / `wait_grafana_healthy`) — so the wave-placement
+problem this paragraph used to describe no longer exists. grafana-bootstrap
+went too (its minted token could rot after a restore); grafana-managed now
+authenticates as Grafana's admin directly.
 
 ## Wave 7 — every remaining `*-gateway` chart
 
