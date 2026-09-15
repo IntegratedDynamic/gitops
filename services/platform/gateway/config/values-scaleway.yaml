@@ -2,17 +2,15 @@ gatewayClassName: envoy-gateway
 gatewayName: scaleway-gateway
 namespace: gateway
 
-# templates/gateway.yaml derives wildcardHostname ("*.<baseDomain>") and
-# the wildcard cert Secret name from this single value — covers every
-# current and future subdomain of baseDomain, new apps attach an HTTPRoute
-# for their own hostname and need zero changes here. Overridden per-cluster
-# by the infra repo's argocd.tf (var.base_domain, passed as this
-# Application's baseDomain Helm parameter — see values-networking-resources.yaml's
-# baseDomainParam: true on this app's entry): main's own workspace keeps
-# this default unchanged, an ephemeral cluster workspace gets its own real
-# subdomain (e.g. "pr-123.scalepack.fr") so its Gateway/wildcard cert never
-# contend with main's over the same hostnames.
-baseDomain: scalepack.fr
+# Wildcard covers every current and future subdomain — new apps attach an
+# HTTPRoute for their own hostname and need zero changes here. Also covers
+# an ephemeral cluster's flat-suffixed hostnames (e.g.
+# "argocd-pr-123.scalepack.fr", see the *-gateway charts' own hostSuffix
+# value) — still just one DNS label under scalepack.fr, so this chart needs
+# no per-environment parametrization at all.
+domain: scalepack.fr
+wildcardHostname: "*.scalepack.fr"
+wildcardCertSecretName: scalepack-fr-wildcard-tls
 
 # Which ClusterIssuer the Gateway's TLS listener actually uses.
 #
