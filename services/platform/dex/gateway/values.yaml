@@ -11,7 +11,20 @@ dex:
   serviceName: dex
   servicePort: 5556
 
+# domain: the platform's base domain -- a value like everything else here,
+# never hardcoded in the template.
+domain: scalepack.fr
+
+# hostSuffix: overridden per-cluster by the infra repo's argocd.tf
+# (var.env_suffix, this app's hostSuffixParam: true in
+# values-networking-resources.yaml) -- empty by default (main's own
+# workspace, hostname unchanged: "auth.scalepack.fr"). An ephemeral cluster
+# workspace overrides this to e.g. "-pr-123", producing
+# "auth-pr-123.scalepack.fr" -- still one flat DNS label under domain, no
+# change needed to gateway-config's wildcard cert.
+hostSuffix: ""
+
 gateway:
-  hostname: auth.scalepack.fr
+  hostPrefix: auth
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway

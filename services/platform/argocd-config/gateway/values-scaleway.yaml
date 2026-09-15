@@ -2,8 +2,21 @@ enabled: true
 
 namespace: argocd
 
+# domain: the platform's base domain -- a value like everything else here,
+# never hardcoded in the template.
+domain: scalepack.fr
+
+# hostSuffix: overridden per-cluster by the infra repo's argocd.tf
+# (var.env_suffix, this app's hostSuffixParam: true in
+# values-networking-resources.yaml) -- empty by default (main's own
+# workspace, hostname unchanged: "argocd.scalepack.fr"). An ephemeral
+# cluster workspace overrides this to e.g. "-pr-123", producing
+# "argocd-pr-123.scalepack.fr" -- still one flat DNS label under domain,
+# no change needed to gateway-config's wildcard cert.
+hostSuffix: ""
+
 gateway:
-  hostname: argocd.scalepack.fr
+  hostPrefix: argocd
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 

@@ -3,7 +3,11 @@ gatewayName: scaleway-gateway
 namespace: gateway
 
 # Wildcard covers every current and future subdomain — new apps attach an
-# HTTPRoute for their own hostname and need zero changes here.
+# HTTPRoute for their own hostname and need zero changes here. Also covers
+# an ephemeral cluster's flat-suffixed hostnames (e.g.
+# "argocd-pr-123.scalepack.fr", see the *-gateway charts' own hostSuffix
+# value) — still just one DNS label under scalepack.fr, so this chart needs
+# no per-environment parametrization at all.
 domain: scalepack.fr
 wildcardHostname: "*.scalepack.fr"
 wildcardCertSecretName: scalepack-fr-wildcard-tls
