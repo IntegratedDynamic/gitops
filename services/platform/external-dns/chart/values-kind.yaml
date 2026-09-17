@@ -1,0 +1,46 @@
+# infra#110 kind CI tier -- identical to values-scaleway.yaml except
+# dryRun: true (upstream kubernetes-sigs/external-dns chart's own flag,
+# maps to the --dry-run CLI flag): external-dns still reconciles against
+# the real, OpenBao-restored external-dns-scaleway-credentials and
+# computes/logs what it would change, but its own reconcile loop skips the
+# provider's actual write call entirely -- a structural block, not one that
+# depends on the credential being fake (see infra repo's
+# 10-cluster/kind/main.tf header comment). txtOwnerId also changed as a
+# defense-in-depth belt-and-suspenders measure (harmless either way once
+# dryRun is set, but keeps this tier's registry identity distinct from
+# production's on the off chance dryRun is ever dropped by a future edit).
+external-dns:
+  provider:
+    name: scaleway
+
+  dryRun: true
+
+  sources:
+    - service
+    - gateway-httproute
+
+  env:
+    - name: SCW_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-scaleway-credentials
+          key: SCW_ACCESS_KEY
+    - name: SCW_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-scaleway-credentials
+          key: SCW_SECRET_KEY
+
+  domainFilters:
+    - scalepack.fr
+  policy: upsert-only
+  registry: txt
+  txtOwnerId: kind-ci
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi

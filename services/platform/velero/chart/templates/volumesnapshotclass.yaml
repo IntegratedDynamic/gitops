@@ -5,6 +5,18 @@
 # every cluster out of the box) rather than hand-editing those to add
 # Velero's selection label below. Same driver, so Velero's snapshots land in
 # the same underlying Scaleway snapshot mechanism either way.
+#
+# Gated on enableCSISnapshotClass (default true, infra#110's kind CI tier
+# sets it false in values-kind.yaml): confirmed live that a vanilla kind
+# cluster has no external-snapshotter CRDs installed at all (no CSI driver
+# providing them, unlike Kapsule) -- creating this object there is a hard
+# ArgoCD SyncFailed ("could not find snapshot.storage.k8s.io/
+# VolumeSnapshotClass ... Make sure the CRD is installed"), not a graceful
+# degrade. Real CSI snapshot semantics are explicitly Scaleway-only scope
+# for that tier (infra#110's own "what kind cannot validate" list) --
+# skipping this object entirely is the fix, not installing the CRD just to
+# satisfy it.
+{{- if .Values.enableCSISnapshotClass }}
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
@@ -17,3 +29,4 @@ driver: csi.scaleway.com
 # Not is-default-class: this is Velero's own class, not a change to
 # cluster-wide default dynamic-provisioning-from-snapshot behavior.
 deletionPolicy: Delete
+{{- end }}

@@ -1,0 +1,5 @@
+# infra#110 kind CI tier -- same reasoning as
+# services/platform/gateway/cert-restore/values-kind.yaml: this chart's own
+# `enabled` flag as a full no-op, since a fresh kind cluster never has a
+# prior Velero backup of its own grafana-data PVC to restore.
+enabled: false

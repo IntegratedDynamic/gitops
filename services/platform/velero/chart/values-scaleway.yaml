@@ -63,6 +63,16 @@
 # domain, services/platform/monitoring/grafana-restore — same reason, a
 # different consumer.
 #
+# Explicit true (this chart has no base values.yaml, so without this the
+# key is simply undefined here -- templates/volumesnapshotclass.yaml's own
+# `{{- if .Values.enableCSISnapshotClass }}` gate, added for infra#110's
+# kind tier, would otherwise skip creating the real VolumeSnapshotClass on
+# THIS cluster too). Deliberately not `| default true` in the template:
+# Sprig's `default` can't distinguish an explicit `false` from unset (both
+# are the bool zero value), so that would have silently ignored kind's own
+# `enableCSISnapshotClass: false` override -- confirmed live.
+enableCSISnapshotClass: true
+
 # Values below nest under `velero:` because this chart is a thin wrapper
 # declaring the real Velero chart as a dependency (see chart/Chart.yaml) —
 # Helm only exposes a subchart the values under its dependency name.

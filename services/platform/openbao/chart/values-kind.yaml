@@ -1,0 +1,60 @@
+# infra#110 kind CI tier -- identical to values-scaleway.yaml (same seal
+# "awskms" + same openbao-unseal-aws credentials as production, on purpose:
+# this tier restores a REAL production raft snapshot, which can only be
+# unsealed by an instance running the SAME seal config against the SAME KMS
+# key -- see infra repo's 10-cluster/kind/main.tf header comment for the
+# full "why"), with exactly one change: snapshotAgent removed entirely
+# (upstream openbao-helm chart defaults it to disabled). A kind CI run
+# restores from the real backup-dev-id bucket but must never be able to
+# WRITE a new snapshot back into it.
+openbao:
+  server:
+    ha:
+      enabled: false
+    extraLabels:
+      scalepack.fr/sync-wave: "-1"
+    topologySpreadConstraints: |
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        matchLabelKeys:
+          - scalepack.fr/sync-wave
+        labelSelector: {}
+    extraSecretEnvironmentVars:
+      - envName: AWS_ACCESS_KEY_ID
+        secretName: openbao-unseal-aws
+        secretKey: AWS_ACCESS_KEY_ID
+      - envName: AWS_SECRET_ACCESS_KEY
+        secretName: openbao-unseal-aws
+        secretKey: AWS_SECRET_ACCESS_KEY
+    standalone:
+      config: |
+        ui = true
+        listener "tcp" {
+          address     = "0.0.0.0:8200"
+          tls_disable = true
+        }
+        storage "raft" {
+          path    = "/openbao/data"
+          node_id = "openbao-0"
+        }
+        seal "awskms" {
+          region     = "eu-west-3"
+          kms_key_id = "367e11de-75f4-4df0-a038-b6cf06ae2ead"
+        }
+    resources:
+      requests:
+        cpu: 50m
+        memory: 160Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  injector:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
