@@ -66,81 +66,44 @@
 # (alongside secrets-sync/ESO), not this chart's own wave 6, so ESO has the
 # maximum possible buffer to sync the real Secret before this pod starts.
 #
+# domain/hostSuffix: same flat-suffix convention as the five *-gateway
+# charts (services/platform/dex/gateway et al., "refactor(gateway): flat
+# hostSuffix instead of a nested baseDomain") -- domain is the platform's
+# real base domain (never hardcoded in a template), hostSuffix is
+# overridden per-cluster by the infra repo's argocd.tf (var.env_suffix,
+# dex-apps' own hostSuffix parameter in 10-cluster/scaleway/platform-apps/
+# values-dex.yaml). Empty by default: main's own workspace keeps every
+# hostname below unchanged.
+#
+# CONFIRMED LIVE (infra#113 SSO-fix, 2026-09-17): an ephemeral cluster's
+# Gateway/HTTPRoute layer already got hostSuffix support from that gateway
+# refactor, but Dex's OWN issuer/redirect-URI config here never did --
+# every OIDC login against a suffixed cluster (e.g. https://argocd-pr-123.
+# scalepack.fr) failed outright, because Dex's static "argocd" client only
+# ever whitelisted the UNSUFFIXED https://argocd.scalepack.fr/auth/callback,
+# and ArgoCD's own oidc.config.issuer (infra repo's argocd.tf) pointed at
+# the unsuffixed https://auth.scalepack.fr -- production's real Dex, not
+# the ephemeral cluster's own.
+domain: scalepack.fr
+hostSuffix: ""
+
 # Values below nest under `dex:` because this chart is a thin wrapper
 # declaring the real Dex chart as a dependency (see chart/Chart.yaml) — Helm
 # only exposes a subchart the values under its dependency name.
 dex:
-  config:
-    issuer: https://auth.scalepack.fr
-
-    storage:
-      # See this file's header comment — `memory` rotates the OIDC signing
-      # keys on every Dex restart and breaks every RP's cached JWKS.
-      type: kubernetes
-      config:
-        inCluster: true
-
-    # GitHub is the only login method — no local username/password DB.
-    enablePasswordDB: false
-
-    oauth2:
-      # Skip Dex's own "Grant Access" consent screen — envoy-gateway is
-      # our own trusted client, not a third-party app.
-      skipApprovalScreen: true
-
-    connectors:
-      - type: github
-        id: github
-        name: GitHub
-        config:
-          clientID: "$GITHUB_CLIENT_ID"
-          clientSecret: "$GITHUB_CLIENT_SECRET"
-          redirectURI: https://auth.scalepack.fr/callback
-          orgs:
-            - name: IntegratedDynamic
-
-    staticClients:
-      - id: envoy-gateway
-        name: Envoy Gateway
-        # staticClients has no $VAR expansion (that's connectors/storage
-        # only) — it needs this dedicated secretEnv field instead,
-        # naming the env var (no $ prefix). https://github.com/dexidp/dex/issues/889
-        secretEnv: ENVOY_CLIENT_SECRET
-        redirectURIs:
-          # One entry per protected app — see services/products/demo/chart/templates/securitypolicy.yaml.
-          - https://demo.scalepack.fr/oauth2/callback
-      - id: argocd
-        name: ArgoCD
-        secretEnv: ARGOCD_CLIENT_SECRET
-        redirectURIs:
-          - https://argocd.scalepack.fr/auth/callback
-      - id: argocd-cli
-        name: ArgoCD CLI
-        public: true
-        redirectURIs:
-          # Fixed port (8085) is the CLI's documented default
-          # (--sso-port to override).
-          - http://localhost:8085/auth/callback
-      - id: openbao
-        name: OpenBao
-        secretEnv: OPENBAO_CLIENT_SECRET
-        redirectURIs:
-          - https://openbao.scalepack.fr/ui/vault/auth/oidc/oidc/callback
-          # `bao login -method=oidc`'s own default local callback port.
-          - http://localhost:8250/oidc/callback
-      - id: grafana
-        name: Grafana
-        secretEnv: GRAFANA_CLIENT_SECRET
-        redirectURIs:
-          # Grafana's fixed generic_oauth callback path.
-          - https://grafana.scalepack.fr/login/generic_oauth
-      - id: argo-workflows
-        name: Argo Workflows
-        secretEnv: ARGO_WORKFLOWS_CLIENT_SECRET
-        redirectURIs:
-          # Argo Server's fixed SSO callback path (server.sso.redirectUrl,
-          # services/platform/argo-workflows/chart/values-scaleway.yaml).
-          - https://argo-workflows.scalepack.fr/oauth2/callback
+  # The vendored Dex chart's own templates/secret.yaml renders `.Values.
+  # config` via a PLAIN `toYaml` — confirmed in charts/dex-0.24.1.tgz, no
+  # `tpl` call anywhere near it -- so a `{{ }}` placeholder written directly
+  # into a `config:` key here would never be evaluated, it'd be dumped into
+  # Dex's actual config file as literal text. configSecret.create: false
+  # (+ a name of our own choosing) turns that subchart-rendered Secret off
+  # entirely; templates/config-secret.yaml (this chart's own, sibling to
+  # this file) is now the SOLE source of truth for Dex's config, built with
+  # real Helm templating so issuer/redirectURI/staticClients can use
+  # {{ .Values.hostSuffix }}.
+  configSecret:
+    create: false
+    name: dex-config-override
 
   envVars:
     - name: GITHUB_CLIENT_ID
