@@ -1,0 +1,82 @@
+# infra#110 kind CI tier -- identical to values-scaleway.yaml except
+# enableCSISnapshotClass: false (this chart's own templates/
+# volumesnapshotclass.yaml gate): confirmed live that vanilla kind has no
+# external-snapshotter CRDs at all (no CSI driver providing them, unlike
+# Kapsule), so creating that object is a hard ArgoCD SyncFailed there, not
+# a graceful degrade. Real CSI snapshot semantics are explicitly
+# Scaleway-only scope for this tier -- everything else (credentials, BSL,
+# schedules) is unchanged, kept fully in sync with values-scaleway.yaml by
+# hand, same as this repo's other values-kind.yaml overrides.
+enableCSISnapshotClass: false
+
+velero:
+  initContainers:
+    - name: velero-plugin-for-aws
+      image: velero/velero-plugin-for-aws:v1.13.1
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - mountPath: /target
+          name: plugins
+
+  credentials:
+    useSecret: true
+    existingSecret: velero-scaleway-credentials
+
+  deployNodeAgent: false
+
+  configuration:
+    features: EnableCSI
+    volumeSnapshotLocation: []
+    backupStorageLocation:
+      - name: default
+        provider: velero.io/aws
+        bucket: backup-velero-dev-id
+        backupSyncPeriod: 10s
+        credential:
+          name: velero-scaleway-credentials
+          key: cloud
+        config:
+          region: fr-par
+          s3Url: https://s3.fr-par.scw.cloud
+          s3ForcePathStyle: "true"
+
+  schedules:
+    cert-secrets:
+      schedule: "0 * * * *"
+      template:
+        ttl: "336h"
+        storageLocation: default
+        includedNamespaces:
+          - cert-manager
+          - gateway
+        includedResources:
+          - secrets
+
+    grafana-data:
+      schedule: "15 * * * *"
+      template:
+        ttl: "336h"
+        storageLocation: default
+        includedNamespaces:
+          - monitoring
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: grafana
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 112Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+
+  podLabels:
+    scalepack.fr/sync-wave: "-1"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - scalepack.fr/sync-wave
+      labelSelector: {}
