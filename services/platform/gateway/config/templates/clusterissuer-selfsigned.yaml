@@ -1,0 +1,16 @@
+# infra#110 kind CI tier: a genuinely self-signed ClusterIssuer -- no ACME,
+# no DNS01 challenge, no call to cert-manager-webhook-scaleway at all.
+# Selected via activeClusterIssuer (infra repo's 10-cluster/kind/argocd.tf
+# forces it to "selfsigned" for this tier) -- gateway.yaml's own
+# cert-manager.io/cluster-issuer annotation just names whichever issuer
+# activeClusterIssuer resolves to, so this structurally prevents
+# cert-manager from ever mutating real DNS on this tier, regardless of
+# what real Scaleway DNS credentials that domain's ExternalSecret resolves
+# to. Rendered unconditionally, same as clusterissuer-prod.yaml/
+# clusterissuer-staging.yaml -- cheap, inert unless actually selected.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}

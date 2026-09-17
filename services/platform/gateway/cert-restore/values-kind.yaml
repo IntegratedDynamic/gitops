@@ -1,0 +1,6 @@
+# infra#110 kind CI tier -- this chart's own `enabled` flag (README.md, all
+# 4 templates gate on it) as a full no-op. A kind CI run has no prior Velero
+# backup of ITS OWN cluster's cert-manager/gateway Secrets (each kind
+# cluster is fresh every run) -- letting this run would just burn the full
+# ~25min fail-open budget on a restore that can never find anything.
+enabled: false
