@@ -87,6 +87,23 @@
 domain: scalepack.fr
 hostSuffix: ""
 
+# infra#113 SSO-fix follow-up (2026-09-18): GitHub's OAuth App requires an
+# exact, manually pre-registered redirect_uri per host -- confirmed live
+# testing cluster pr-114 ("Be careful! The redirect_uri is not associated
+# with this application"), and that doesn't scale to one new hostname per
+# ephemeral cluster. Ephemeral clusters (hostSuffix != "") bypass the real
+# GitHub connector via a local password login instead (config-secret.yaml's
+# enablePasswordDB/staticPasswords) -- it's not the stable workspace's real
+# GitHub-org-gated SSO, but it's enough to validate the OIDC wiring itself
+# (Dex <-> ArgoCD/Grafana/OpenBao). Plaintext on purpose, not pre-hashed:
+# config-secret.yaml bcrypts it at render time via Sprig's `bcrypt`, and
+# it's threaded in fresh per apply by 10-cluster/scaleway/argocd.tf's
+# random_password.dex_static_password (dex-apps' own parameter, same
+# mechanism as hostSuffix above) -- never a fixed password committed here.
+# Empty by default: main's own workspace never enables the password DB at
+# all (see config-secret.yaml's `ne .Values.hostSuffix ""` guard).
+dexStaticPassword: ""
+
 # Values below nest under `dex:` because this chart is a thin wrapper
 # declaring the real Dex chart as a dependency (see chart/Chart.yaml) — Helm
 # only exposes a subchart the values under its dependency name.
