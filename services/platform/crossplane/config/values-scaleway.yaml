@@ -50,6 +50,15 @@ workspaces:
     externalName: 11-secrets-openbao-managed-dev
     entrypoint: 11-secrets/openbao/managed
     vaultAddress: http://openbao.openbao.svc:8200/
+    # infra#115 follow-up (2026-09-30): this Workspace pod IS the
+    # provider-opentofu ServiceAccount (crossplane-system) that
+    # vault_kubernetes_auth_backend_role.crossplane
+    # (infrastructure repo's 11-secrets/openbao/managed/main.tf) trusts —
+    # no long-lived secret_id to manage/rotate the way the AppRole identity
+    # (this root's other, non-in-cluster execution contexts) needs. See
+    # that root's version.tf var.vault_auth_method for the full incident
+    # this follows up on.
+    vaultAuthMethod: kubernetes
   grafanaManaged:
     externalName: 12-monitoring-grafana-managed-dev
     entrypoint: 12-monitoring/grafana/managed
