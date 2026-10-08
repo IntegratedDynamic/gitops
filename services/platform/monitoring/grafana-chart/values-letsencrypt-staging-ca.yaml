@@ -2,7 +2,7 @@
 # is true (infra repo's argocd.tf/platform-apps/templates/apps.yaml,
 # values-grafana.yaml's extraValueFileParam) -- trusts the Let's Encrypt
 # staging root CA for Grafana's own server-side OIDC calls to
-# https://auth.scalepack.fr (auth_url/token_url/api_url in
+# https://auth.staging.scalepack.fr (auth_url/token_url/api_url in
 # values-scaleway.yaml) without touching the pod's system trust store at
 # all.
 #

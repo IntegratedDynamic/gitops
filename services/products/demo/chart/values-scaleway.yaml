@@ -15,7 +15,7 @@ ingress:
 
 gateway:
   enabled: true
-  hostname: demo.scalepack.fr
+  hostname: demo.staging.scalepack.fr
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 
@@ -27,11 +27,11 @@ auth:
   # Duplicates gateway.hostname above — the sso-guard subchart only sees
   # this auth: block (Helm scopes subchart values to the parent key
   # matching its dependency name), not sibling keys like gateway.hostname.
-  hostname: demo.scalepack.fr
-  issuer: https://auth.scalepack.fr
+  hostname: demo.staging.scalepack.fr
+  issuer: https://auth.staging.scalepack.fr
   clientID: envoy-gateway
   clientSecretName: demo-sso-client-secret
-  cookieDomain: scalepack.fr
+  cookieDomain: staging.scalepack.fr
   clusterSecretStoreName: openbao
   openbaoPath: apps/dex/credentials
   # Service created by bootstrap/values.yaml — referenced directly so
