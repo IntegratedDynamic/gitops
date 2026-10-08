@@ -59,7 +59,7 @@
 # redirect URIs are required: the UI's fixed callback path
 # (/ui/vault/auth/<mount>/oidc/callback, mount = "oidc") and the CLI's
 # default `bao login -method=oidc` callback (localhost:8250). See
-# services/platform/openbao/gateway for the HTTPRoute exposing openbao.scalepack.fr.
+# services/platform/openbao/gateway for the HTTPRoute exposing openbao.staging.scalepack.fr.
 #
 # Credentials (GitHub client id/secret, the static client secret) come from
 # OpenBao via services/platform/dex/secret — wave 1 in bootstrap/values.yaml
@@ -79,12 +79,12 @@
 # Gateway/HTTPRoute layer already got hostSuffix support from that gateway
 # refactor, but Dex's OWN issuer/redirect-URI config here never did --
 # every OIDC login against a suffixed cluster (e.g. https://argocd-pr-123.
-# scalepack.fr) failed outright, because Dex's static "argocd" client only
-# ever whitelisted the UNSUFFIXED https://argocd.scalepack.fr/auth/callback,
+# staging.scalepack.fr) failed outright, because Dex's static "argocd" client only
+# ever whitelisted the UNSUFFIXED https://argocd.staging.scalepack.fr/auth/callback,
 # and ArgoCD's own oidc.config.issuer (infra repo's argocd.tf) pointed at
-# the unsuffixed https://auth.scalepack.fr -- production's real Dex, not
+# the unsuffixed https://auth.staging.scalepack.fr -- production's real Dex, not
 # the ephemeral cluster's own.
-domain: scalepack.fr
+domain: staging.scalepack.fr
 hostSuffix: ""
 
 # infra#113 SSO-fix follow-up (2026-09-18): GitHub's OAuth App requires an

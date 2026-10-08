@@ -1,4 +1,4 @@
-# Exposes Dex itself at auth.scalepack.fr — Dex owns this host entirely
+# Exposes Dex itself at auth.staging.scalepack.fr — Dex owns this host entirely
 # (discovery/JWKS/authorization/token endpoints, its own /callback from
 # GitHub, and the sign-in UI). Each protected app's OIDC callback lives on
 # that app's OWN hostname instead (see services/products/demo/chart/templates/securitypolicy.yaml)

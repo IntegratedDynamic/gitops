@@ -1,5 +1,5 @@
 {{- if .Values.enabled }}
-# Exposes the ArgoCD UI/API at argocd.scalepack.fr on the shared gateway.
+# Exposes the ArgoCD UI/API at argocd.staging.scalepack.fr on the shared gateway.
 # Split out of services/platform/argocd-config/config 2026-08-13 — that
 # chart now holds only the OpenBao-sourced OIDC secret + the restart hook,
 # this one holds only the HTTPRoute (Gateway-API resource, hence the

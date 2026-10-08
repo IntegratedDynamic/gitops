@@ -138,14 +138,14 @@ grafana:
       labelSelector: {}
 
   # Native OIDC against our shared Dex (bootstrap/values.yaml,
-  # staticClients.grafana), exposed at grafana.scalepack.fr by
+  # staticClients.grafana), exposed at grafana.staging.scalepack.fr by
   # services/platform/monitoring/grafana-gateway — mirrors how ArgoCD/OpenBao talk to Dex
   # natively instead of going through Envoy Gateway's SecurityPolicy.
   # client_secret comes in via envValueFrom below rather than here,
   # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
   grafana.ini:
     server:
-      root_url: https://grafana.scalepack.fr
+      root_url: https://grafana.staging.scalepack.fr
     auth:
       # Hides the username/password form from the UI — doesn't
       # touch the API (auth.basic stays enabled, see admin: above).
@@ -155,9 +155,9 @@ grafana:
       name: GitHub (Dex)
       client_id: grafana
       scopes: "openid profile email groups"
-      auth_url: https://auth.scalepack.fr/auth
-      token_url: https://auth.scalepack.fr/token
-      api_url: https://auth.scalepack.fr/userinfo
+      auth_url: https://auth.staging.scalepack.fr/auth
+      token_url: https://auth.staging.scalepack.fr/token
+      api_url: https://auth.staging.scalepack.fr/userinfo
       # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
       # rbac.policy.csv grants role:admin to — everyone else (no
       # team, or a different team) falls back to Viewer. NOTE:
