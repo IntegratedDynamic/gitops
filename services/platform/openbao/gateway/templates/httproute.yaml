@@ -1,5 +1,5 @@
 {{- if .Values.enabled }}
-# Exposes the OpenBao UI/API at openbao.scalepack.fr on the shared gateway.
+# Exposes the OpenBao UI/API at openbao.staging.scalepack.fr on the shared gateway.
 # No sso-guard edge gate here, same reasoning as services/platform/argocd-config/config: OpenBao
 # authenticates natively (its own auth/oidc auth method, configured directly
 # inside OpenBao — there's no app-level "oidc.config" setting to wire up

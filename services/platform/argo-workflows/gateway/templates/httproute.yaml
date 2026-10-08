@@ -1,4 +1,4 @@
-# Exposes the Argo Server UI/API at argo-workflows.scalepack.fr on the
+# Exposes the Argo Server UI/API at argo-workflows.staging.scalepack.fr on the
 # shared gateway -- see Chart.yaml for why this is a split-out chart.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

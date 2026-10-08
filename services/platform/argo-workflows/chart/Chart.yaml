@@ -7,7 +7,7 @@ description: >-
   list) instead of the old, uncoordinated services-vendor-scaleway/services-
   app-scaleway split. The Argo Server component (UI/API) is enabled in
   values-scaleway.yaml (2026-08-20) -- native OIDC against the shared Dex,
-  exposed at argo-workflows.scalepack.fr by
+  exposed at argo-workflows.staging.scalepack.fr by
   services/platform/argo-workflows/gateway -- so
   Workflows/CronWorkflows created by
   services/platform/argo-workflows/terraform-apply can actually be

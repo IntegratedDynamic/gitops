@@ -5,12 +5,19 @@ namespace: gateway
 # Wildcard covers every current and future subdomain — new apps attach an
 # HTTPRoute for their own hostname and need zero changes here. Also covers
 # an ephemeral cluster's flat-suffixed hostnames (e.g.
-# "argocd-pr-123.scalepack.fr", see the *-gateway charts' own hostSuffix
-# value) — still just one DNS label under scalepack.fr, so this chart needs
+# "argocd-pr-123.staging.scalepack.fr", see the *-gateway charts' own hostSuffix
+# value) — still just one DNS label under staging.scalepack.fr, so this chart needs
 # no per-environment parametrization at all.
-domain: scalepack.fr
-wildcardHostname: "*.scalepack.fr"
-wildcardCertSecretName: scalepack-fr-wildcard-tls
+#
+# staging/prod split: this cluster's domain moved from the bare apex
+# (scalepack.fr) to staging.scalepack.fr -- the future prod cluster (not
+# yet created) gets its own values-scaleway-prod.yaml (or equivalent) with
+# prod.scalepack.fr instead, its own wildcard cert, its own
+# wildcardCertSecretName. Each environment needs its own ACME wildcard
+# order -- a Let's Encrypt wildcard only covers one subdomain level.
+domain: staging.scalepack.fr
+wildcardHostname: "*.staging.scalepack.fr"
+wildcardCertSecretName: staging-scalepack-fr-wildcard-tls
 
 # Which ClusterIssuer the Gateway's TLS listener actually uses.
 #
@@ -22,14 +29,14 @@ wildcardCertSecretName: scalepack-fr-wildcard-tls
 # live it was still causing real problems a month later: browsers hard-
 # blocking login (no click-through) on domains where they'd previously
 # cached an HSTS policy from a real cert, and every native-OIDC app's
-# server-side calls to auth.scalepack.fr (token exchange, userinfo)
+# server-side calls to auth.staging.scalepack.fr (token exchange, userinfo)
 # failing TLS verification -- those pods don't trust the staging CA.
 # (argo-workflows' own server-side calls route around this entirely via
 # Dex's in-cluster Service instead of this cert -- see
 # services/platform/argo-workflows/chart's server.sso.issuer -- but
 # every *other* native-OIDC app, and any interactive browser login,
 # still goes through this cert.) A full cluster rebuild still wipes
-# scalepack-fr-wildcard-tls and forces a new ACME order each time
+# staging-scalepack-fr-wildcard-tls and forces a new ACME order each time
 # (services/platform/gateway/cert-restore exists specifically to avoid
 # that by restoring the previous cert from backup instead) -- if a burst
 # of same-week rebuilds

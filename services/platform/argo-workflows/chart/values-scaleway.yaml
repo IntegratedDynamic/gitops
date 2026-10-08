@@ -8,7 +8,7 @@ argo-workflows:
   # terraform-apply's own CronWorkflows. Native OIDC against our shared Dex,
   # same pattern as ArgoCD/Grafana (see
   # services/platform/dex/chart/values-scaleway.yaml's staticClients.argo-workflows) —
-  # exposed at argo-workflows.scalepack.fr via
+  # exposed at argo-workflows.staging.scalepack.fr via
   # services/platform/argo-workflows/gateway.
   server:
     enabled: true
@@ -16,7 +16,7 @@ argo-workflows:
       - sso
     sso:
       enabled: true
-      # In-cluster Dex address, not the public https://auth.scalepack.fr --
+      # In-cluster Dex address, not the public https://auth.staging.scalepack.fr --
       # confirmed live 2026-08-20: unlike Grafana/ArgoCD's own OIDC (which
       # only dial Dex lazily, on an actual login attempt), argo-server does
       # EAGER OIDC discovery at startup and crash-loops if that dial fails.
@@ -29,10 +29,10 @@ argo-workflows:
       # discovery/JWKS/token-exchange, but accept this OTHER string as the
       # token's iss claim" -- Dex's own issuer config stays the public URL
       # (services/platform/dex/chart/values-scaleway.yaml), so tokens it
-      # issues still carry https://auth.scalepack.fr regardless of which
+      # issues still carry https://auth.staging.scalepack.fr regardless of which
       # URL was dialed to fetch its discovery document.
       issuer: http://dex.gateway.svc:5556
-      issuerAlias: https://auth.scalepack.fr
+      issuerAlias: https://auth.staging.scalepack.fr
       clientId:
         name: argo-workflows-sso
         key: client-id
@@ -40,7 +40,7 @@ argo-workflows:
         name: argo-workflows-sso
         key: client-secret
       # Argo Server's fixed SSO callback path.
-      redirectUrl: https://argo-workflows.scalepack.fr/oauth2/callback
+      redirectUrl: https://argo-workflows.staging.scalepack.fr/oauth2/callback
       # Same "groups" claim ArgoCD's rbac.policy.csv and Grafana's
       # role_attribute_path already key off of.
       scopes:

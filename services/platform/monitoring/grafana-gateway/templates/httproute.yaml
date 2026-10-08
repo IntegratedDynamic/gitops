@@ -1,5 +1,5 @@
 {{- if .Values.enabled }}
-# Exposes the Grafana UI at grafana.scalepack.fr on the shared gateway.
+# Exposes the Grafana UI at grafana.staging.scalepack.fr on the shared gateway.
 # Split out of services/platform/monitoring/grafana-config 2026-08-13 —
 # that chart's OpenBao-sourced Secrets later moved on too, into
 # services/platform/monitoring/grafana-secret (wave 1); grafana-config

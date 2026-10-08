@@ -15,9 +15,9 @@ spec:
       name: {{ .Values.gatewayName }}
       sectionName: http
   # No hostnames set on purpose: the HTTP listener already only accepts
-  # *.scalepack.fr traffic, so this still matches everything it should —
+  # *.staging.scalepack.fr traffic, so this still matches everything it should —
   # but a wildcard here would make external-dns try to register a literal
-  # "a-*.scalepack.fr" TXT ownership record, which Scaleway's DNS API
+  # "a-*.staging.scalepack.fr" TXT ownership record, which Scaleway's DNS API
   # rejects as an invalid name and crashloops the whole external-dns pod.
   rules:
     - filters:

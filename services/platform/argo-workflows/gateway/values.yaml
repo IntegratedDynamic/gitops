@@ -1,4 +1,4 @@
-# Exposes Argo Server at argo-workflows.scalepack.fr via HTTPRoute.
+# Exposes Argo Server at argo-workflows.staging.scalepack.fr via HTTPRoute.
 namespace: argo-workflows
 
 # Service created by the argo-workflows Helm chart (release name ==
@@ -10,14 +10,14 @@ argoServer:
 
 # domain: the platform's base domain -- a value like everything else here,
 # never hardcoded in the template.
-domain: scalepack.fr
+domain: staging.scalepack.fr
 
 # hostSuffix: overridden per-cluster by the infra repo's argocd.tf
 # (var.env_suffix, this app's hostSuffixParam: true in
 # values-networking-resources.yaml) -- empty by default (main's own
-# workspace, hostname unchanged: "argo-workflows.scalepack.fr"). An
+# workspace, hostname unchanged: "argo-workflows.staging.scalepack.fr"). An
 # ephemeral cluster workspace overrides this to e.g. "-pr-123", producing
-# "argo-workflows-pr-123.scalepack.fr" -- still one flat DNS label under
+# "argo-workflows-pr-123.staging.scalepack.fr" -- still one flat DNS label under
 # domain, no change needed to gateway-config's wildcard cert.
 hostSuffix: ""
 

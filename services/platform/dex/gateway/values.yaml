@@ -1,4 +1,4 @@
-# Exposes Dex at auth.scalepack.fr via HTTPRoute. Used to also materialize
+# Exposes Dex at auth.staging.scalepack.fr via HTTPRoute. Used to also materialize
 # Dex's OpenBao-sourced credentials Secret — that ExternalSecret moved to
 # services/platform/dex/secret 2026-08-13 (wave 1, alongside secrets-sync/
 # ESO, instead of racing dex's own wave for ESO to sync it).
@@ -13,14 +13,14 @@ dex:
 
 # domain: the platform's base domain -- a value like everything else here,
 # never hardcoded in the template.
-domain: scalepack.fr
+domain: staging.scalepack.fr
 
 # hostSuffix: overridden per-cluster by the infra repo's argocd.tf
 # (var.env_suffix, this app's hostSuffixParam: true in
 # values-networking-resources.yaml) -- empty by default (main's own
-# workspace, hostname unchanged: "auth.scalepack.fr"). An ephemeral cluster
+# workspace, hostname unchanged: "auth.staging.scalepack.fr"). An ephemeral cluster
 # workspace overrides this to e.g. "-pr-123", producing
-# "auth-pr-123.scalepack.fr" -- still one flat DNS label under domain, no
+# "auth-pr-123.staging.scalepack.fr" -- still one flat DNS label under domain, no
 # change needed to gateway-config's wildcard cert.
 hostSuffix: ""
 
