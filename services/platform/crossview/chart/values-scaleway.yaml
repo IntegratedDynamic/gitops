@@ -33,7 +33,7 @@ crossview:
         # the main workspace like grafana's root_url -- an ephemeral
         # cluster's hostSuffix is NOT threaded through here, so SSO into
         # crossview only works on the main workspace.
-        origin: https://crossview.scalepack.fr
+        origin: https://crossview.staging.scalepack.fr
     sso:
       oidc:
         enabled: true
@@ -47,10 +47,10 @@ crossview:
         # own public route (same hairpin-NAT gap argo-workflows hit, see
         # services/platform/argo-workflows/chart/values-scaleway.yaml).
         issuer: ""
-        authorizationURL: https://auth.scalepack.fr/auth
+        authorizationURL: https://auth.staging.scalepack.fr/auth
         tokenURL: http://dex.gateway.svc:5556/token
         userInfoURL: http://dex.gateway.svc:5556/userinfo
-        callbackURL: https://crossview.scalepack.fr/api/auth/oidc/callback
+        callbackURL: https://crossview.staging.scalepack.fr/api/auth/oidc/callback
         scope: openid profile email
 
   secrets:
