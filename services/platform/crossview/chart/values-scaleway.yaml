@@ -25,6 +25,11 @@ crossview:
     database:
       enabled: false
     server:
+      log:
+        # TEMPORARY: the backend logs nothing at `info` (no request or error
+        # lines at all), which left the dashboard's "Error loading" panels
+        # undiagnosable from the pod. Revert to `info` once fixed.
+        level: debug
       auth:
         mode: session
       cors:
@@ -69,6 +74,17 @@ crossview:
       secretKeyRef:
         name: crossview-credentials
         key: session-secret
+
+  # The upstream Deployment reads its config via configMapKeyRef, i.e. only at
+  # pod start, and has no checksum annotation: a ConfigMap change alone never
+  # rolls it (hit live 2026-11-03, a stale CORS_ORIGIN/callback after the
+  # domain rename). reloader is already deployed in the cluster; this asks it
+  # to restart the pod on a ConfigMap/Secret change. Placed on the pod
+  # template because the upstream chart exposes no Deployment-level
+  # annotations -- adding it also changes the template, so this very sync
+  # rolls the pod once, reloader's pod-template support or not.
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
 
   app:
     extraEnv:
