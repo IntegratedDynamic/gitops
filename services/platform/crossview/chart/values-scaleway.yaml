@@ -1,0 +1,100 @@
+namespace: crossview
+
+# Values nest under `crossview:` because this is a thin wrapper declaring the
+# real chart as a dependency (see Chart.yaml) -- Helm only exposes a
+# subchart's values under its dependency name.
+crossview:
+  global:
+    namespace: crossview
+    createNamespace: false  # ArgoCD's CreateNamespace=true owns it
+
+  # The upstream chart ships `pullPolicy: Always` and an unpinned tag
+  # (falls back to the chart's appVersion). IfNotPresent: the tag IS the pin.
+  image:
+    pullPolicy: IfNotPresent
+
+  # ── No database ─────────────────────────────────────────────────────────
+  # Crossview's OIDC login works without PostgreSQL: users live in the
+  # signed session cookie instead (upstream docs/SSO_SETUP.md, "database-free
+  # SSO", requires auth.mode: session). The only thing lost is user
+  # persistence across logins -- irrelevant for a single-admin homelab, and
+  # it avoids a stateful Postgres pod to back up for what is only a viewer.
+  database:
+    enabled: false
+  config:
+    database:
+      enabled: false
+    server:
+      auth:
+        mode: session
+      cors:
+        # Public URL, no trailing slash. Mandatory: also the post-login
+        # redirect target (defaults to localhost otherwise). Hardcoded to
+        # the main workspace like grafana's root_url -- an ephemeral
+        # cluster's hostSuffix is NOT threaded through here, so SSO into
+        # crossview only works on the main workspace.
+        origin: https://crossview.scalepack.fr
+    sso:
+      oidc:
+        enabled: true
+        providerName: Dex
+        clientId: crossview
+        # Split-horizon, per upstream docs: `issuer` MUST stay empty (a
+        # non-empty issuer makes OIDC discovery override the explicit
+        # endpoints below). Only the browser-facing authorization URL goes
+        # through the public route; token + userinfo are server-to-server
+        # calls dialed in-cluster -- pods can't reliably reach the cluster's
+        # own public route (same hairpin-NAT gap argo-workflows hit, see
+        # services/platform/argo-workflows/chart/values-scaleway.yaml).
+        issuer: ""
+        authorizationURL: https://auth.scalepack.fr/auth
+        tokenURL: http://dex.gateway.svc:5556/token
+        userInfoURL: http://dex.gateway.svc:5556/userinfo
+        callbackURL: https://crossview.scalepack.fr/api/auth/oidc/callback
+        scope: openid profile email
+
+  secrets:
+    # Upstream defaults are adminUsername=admin / adminPassword=password --
+    # a publicly known local login. Blanked here (an empty string is skipped
+    # by the chart's own secret rendering) and re-injected below from
+    # OpenBao via app.extraEnv instead.
+    adminUsername: ""
+    adminPassword: ""
+    dbPassword: ""
+    OIDCClientSecret:
+      secretKeyRef:
+        name: crossview-credentials
+        key: oidc-client-secret
+    sessionSecret:
+      secretKeyRef:
+        name: crossview-credentials
+        key: session-secret
+
+  app:
+    extraEnv:
+      - name: ADMIN_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: crossview-credentials
+            key: admin-username
+      - name: ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: crossview-credentials
+            key: admin-password
+
+  # The upstream ClusterRole is `get/list/watch` on apiGroups `*` /
+  # resources `*` -- every Secret in the cluster included. Replaced by
+  # templates/clusterrole.yaml (+ binding), scoped to what a Crossplane
+  # viewer actually needs.
+  rbac:
+    create: false
+
+  # The pod-anti-affinity the chart defaults to is meaningless for 1 replica.
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

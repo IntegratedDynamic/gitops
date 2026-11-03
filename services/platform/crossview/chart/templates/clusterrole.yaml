@@ -1,0 +1,42 @@
+# Replaces the upstream chart's ClusterRole (rbac.create: false in
+# values-scaleway.yaml). Upstream grants get/list/watch on apiGroups "*" /
+# resources "*", which includes EVERY Secret in the cluster (OpenBao
+# credentials, the Scaleway API keys, ...) -- for a dashboard behind a
+# login whose first user is admin, that's a far wider blast radius than
+# viewing Crossplane warrants. No `secrets` here at all.
+#
+# apiGroups are enumerated, not wildcarded: RBAC has no partial wildcards
+# (`*.crossplane.io` isn't valid). Adding a Crossplane provider means adding
+# its API group below, otherwise its managed resources won't show up.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossview-viewer
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, pods, services, configmaps, events, nodes, persistentvolumes, persistentvolumeclaims]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  # Crossplane core.
+  - apiGroups: [apiextensions.crossplane.io, pkg.crossplane.io, protection.crossplane.io, ops.crossplane.io]
+    resources: ["*"]
+    verbs: [get, list, watch]
+  # provider-opentofu (Workspace, ProviderConfig, ...).
+  - apiGroups: [opentofu.upbound.io]
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: crossview-viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: crossview-viewer
+subjects:
+  - kind: ServiceAccount
+    name: crossview-sa
+    namespace: {{ .Values.namespace }}
