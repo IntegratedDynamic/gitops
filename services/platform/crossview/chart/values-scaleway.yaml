@@ -30,6 +30,13 @@ crossview:
         # lines at all), which left the dashboard's "Error loading" panels
         # undiagnosable from the pod. Revert to `info` once fixed.
         level: debug
+      # Lower the peak of the managed-resources fetch (upstream: concurrency
+      # 10, pageSize 1000, 5000 items per type). Still ample for a handful of
+      # Workspaces; a guess at the peak, not a measured one.
+      managed:
+        maxConcurrency: 3
+        pageSize: 200
+        maxItemsPerType: 500
       auth:
         mode: session
       cors:
@@ -106,11 +113,17 @@ crossview:
   rbac:
     create: false
 
-  # The pod-anti-affinity the chart defaults to is meaningless for 1 replica.
+  # OOMKilled at 512Mi (live 2026-11-03, exit 137, 3 restarts): the dashboard
+  # calls /api/managed, which discovers every CRD in the cluster (133 here:
+  # ESO, cert-manager, envoy, Crossplane...) and lists their instances
+  # concurrently, and the pod died mid-request -- hence every dashboard panel
+  # showing "Error loading". Back to the upstream chart's own sizing
+  # (requests 256Mi / limits 1Gi, whose comment suggests 1-2Gi on OOM) instead
+  # of the lower numbers I first guessed. Raise further if it still dies.
   resources:
     requests:
       cpu: 25m
-      memory: 128Mi
+      memory: 256Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi
