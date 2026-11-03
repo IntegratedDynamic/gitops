@@ -2,7 +2,7 @@ apiVersion: v2
 name: crossview-gateway
 description: >-
   HTTPRoute-only chart exposing the Crossview UI at
-  crossview.scalepack.fr on the shared gateway -- same split-out
+  crossview.staging.scalepack.fr on the shared gateway -- same split-out
   pattern as services/platform/argo-workflows/gateway. Crossview talks OIDC
   natively to Dex (services/platform/crossview/chart) rather than going
   through Envoy Gateway's SecurityPolicy filter.

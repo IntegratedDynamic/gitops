@@ -1,4 +1,4 @@
-# Exposes Crossview at crossview.scalepack.fr via HTTPRoute.
+# Exposes Crossview at crossview.staging.scalepack.fr via HTTPRoute.
 namespace: crossview
 
 # Service created by the crossview Helm chart: `<fullname>-service`, port 80
@@ -7,7 +7,7 @@ crossview:
   serviceName: crossview-service
   servicePort: 80
 
-domain: scalepack.fr
+domain: staging.scalepack.fr
 
 # Overridden per-cluster by the infra repo's argocd.tf (var.env_suffix, this
 # app's hostSuffixParam in values-networking-resources.yaml). Empty on main's
