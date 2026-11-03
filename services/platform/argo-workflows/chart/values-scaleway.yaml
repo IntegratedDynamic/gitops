@@ -11,6 +11,11 @@ argo-workflows:
   # exposed at argo-workflows.staging.scalepack.fr via
   # services/platform/argo-workflows/gateway.
   server:
+    # reloader restarts this workload when a ConfigMap/Secret it references
+    # changes -- without it the pod keeps what it read at start (live 2026-11-03:
+    # Dex kept its pre-rename issuer for hours). See crossview's values-scaleway.yaml.
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
     enabled: true
     authModes:
       - sso
@@ -153,6 +158,11 @@ argo-workflows:
       create: true
 
   controller:
+    # reloader restarts this workload when a ConfigMap/Secret it references
+    # changes -- without it the pod keeps what it read at start (live 2026-11-03:
+    # Dex kept its pre-rename issuer for hours). See crossview's values-scaleway.yaml.
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
     # Cluster-wide fallback for any Workflow that doesn't set its own
     # podGC/ttlStrategy — terraform-apply's own WorkflowTemplate already
     # sets these explicitly (see terraform-apply/templates/
