@@ -182,6 +182,11 @@ dex:
   # un-injected fallback obvious instead of silently matching production.
   podLabels:
     scalepack.fr/sync-wave: "-1"
+  # reloader restarts this workload when a ConfigMap/Secret it references
+  # changes -- without it the pod keeps what it read at start (live 2026-11-03:
+  # Dex kept its pre-rename issuer for hours). See crossview's values-scaleway.yaml.
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubernetes.io/hostname
