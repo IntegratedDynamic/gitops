@@ -1,0 +1,6 @@
+dependencies:
+- name: crossview
+  repository: https://crossplane-contrib.github.io/crossview
+  version: 4.7.0
+digest: sha256:7ad8bbbaad0a7b14c1e520a3f05e421ee649bd34825e202877419943aed1ef16
+generated: "2026-11-03T15:00:37.183657+01:00"

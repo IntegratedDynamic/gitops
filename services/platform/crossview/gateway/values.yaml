@@ -1,0 +1,21 @@
+# Exposes Crossview at crossview.scalepack.fr via HTTPRoute.
+namespace: crossview
+
+# Service created by the crossview Helm chart: `<fullname>-service`, port 80
+# (fullname == release name "crossview") -- checked via `helm template`.
+crossview:
+  serviceName: crossview-service
+  servicePort: 80
+
+domain: scalepack.fr
+
+# Overridden per-cluster by the infra repo's argocd.tf (var.env_suffix, this
+# app's hostSuffixParam in values-networking-resources.yaml). Empty on main's
+# workspace. NOTE the OIDC URLs in ../chart/values-scaleway.yaml are NOT
+# suffix-aware, so on an ephemeral cluster this route exists but SSO won't.
+hostSuffix: ""
+
+gateway:
+  hostPrefix: crossview
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

@@ -1,0 +1,19 @@
+apiVersion: v2
+name: crossview
+description: >-
+  Vendor the upstream Crossview chart (crossplane-contrib/crossview, a
+  read-only-in-spirit dashboard for Crossplane: Workspaces' Synced/Ready
+  conditions, providers, events) plus a scoped ClusterRole of our own
+  (templates/clusterrole.yaml -- the upstream chart's role grants read on
+  EVERY resource including all Secrets, see that file). Managed as an
+  Application by the infrastructure repo's
+  10-cluster/platform-apps/values-crossplane.yaml. Its HTTPRoute lives in
+  the sibling `gateway` chart and its Secrets in the sibling `secret` chart,
+  same split as every other product here.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: crossview
+    version: 4.7.0
+    repository: "https://crossplane-contrib.github.io/crossview"
