@@ -48,6 +48,15 @@ spec:
         spec:
           containers:
             - name: package-runtime
+              # The Workspaces set forProvider.enableTofuCLILogging: true
+              # (config/templates/workspace-*.yaml), but with the provider's
+              # default log level NOTHING of tofu's init/plan/apply output
+              # reaches the pod logs: observed live 2026-11-04, 18 lines
+              # since start despite two successful reconciles. --debug is
+              # what makes that output appear (hypothesis, verified live on
+              # this change). It also makes the provider's own logs chattier.
+              args:
+                - --debug
               resources:
                 {{- toYaml .Values.provider.resources | nindent 16 }}
 # NOTE on the provider ServiceAccount's secret access (issue #101 watch-out
