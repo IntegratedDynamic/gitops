@@ -122,9 +122,12 @@ crossview:
   # The result is cached (managed.cacheTTLSeconds, 300s), so only the first
   # load after a restart or a cache expiry pays that cost.
   resources:
+    # Requests sized for idle (2m CPU / 36Mi measured), not for the fetch's
+    # peak: the limits below absorb that burst, and a high request would just
+    # reserve node capacity the pod doesn't use 99% of the time.
     requests:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 25m
+      memory: 64Mi
     limits:
       cpu: "1"
       memory: 2Gi
