@@ -114,16 +114,17 @@ crossview:
     create: false
 
   # OOMKilled at 512Mi (live 2026-11-03, exit 137, 3 restarts): the dashboard
-  # calls /api/managed, which discovers every CRD in the cluster (133 here:
-  # ESO, cert-manager, envoy, Crossplane...) and lists their instances
-  # concurrently, and the pod died mid-request -- hence every dashboard panel
-  # showing "Error loading". Back to the upstream chart's own sizing
-  # (requests 256Mi / limits 1Gi, whose comment suggests 1-2Gi on OOM) instead
-  # of the lower numbers I first guessed. Raise further if it still dies.
+  # calls /api/managed, which walks the cluster's CRDs (133 here: ESO,
+  # cert-manager, envoy, Crossplane...). Measured live 2026-11-04 on this
+  # cluster at 1Gi / 500m: the fetch ran ~3.5 min, CPU-throttled at the 500m
+  # limit, and peaked at 959Mi -- 94% of the limit. Hence the upstream chart's
+  # own CPU limit (1000m) and the top of its "1-2Gi if OOMKilled" suggestion.
+  # The result is cached (managed.cacheTTLSeconds, 300s), so only the first
+  # load after a restart or a cache expiry pays that cost.
   resources:
     requests:
-      cpu: 25m
+      cpu: 250m
       memory: 256Mi
     limits:
-      cpu: 500m
-      memory: 1Gi
+      cpu: "1"
+      memory: 2Gi
