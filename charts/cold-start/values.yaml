@@ -1,0 +1,42 @@
+# Same convention as charts/sso-guard: an app includes this as a subchart
+# (alias `coldStart`, condition `coldStart.enabled`) and only sets what is its
+# own below. Everything under `interceptor` is platform-owned (see
+# services/platform/keda) and should not need overriding per app.
+
+# Host the interceptor matches requests on (the app's own HTTPRoute hostname;
+# duplicated here because a subchart only sees its own values block).
+hostname: ""
+
+# Service the interceptor forwards to once the app is up (and its port).
+service: ""
+port: 80
+
+# Deployment to scale. Defaults to the parent release name, same as `service`
+# in every chart of this repo. The Deployment must NOT set spec.replicas.
+targetName: ""
+
+minReplicas: 0
+maxReplicas: 3
+# Seconds without traffic before scaling back down to minReplicas.
+scaledownPeriod: 60
+# What scaling measures (see templates/interceptorroute.yaml for why it is the
+# request RATE and not concurrency). targetValue = requests/s per replica;
+# the app stays "active" until the window has drained, so window + the
+# scaledownPeriod above is roughly how long it takes to go back to zero.
+requestRate:
+  targetValue: 20
+  window: 30s
+  granularity: 1s
+
+# Served IMMEDIATELY while the app has no ready pod, instead of holding the
+# request. The request still counts toward scaling, so it is what wakes the
+# app up. Set to false to hold requests until the app is ready instead.
+placeholder:
+  enabled: true
+
+# KEDA HTTP Add-on's interceptor (services/platform/keda). The parent's
+# HTTPRoute points its backendRef at this Service.
+interceptor:
+  service: keda-add-ons-http-interceptor-proxy
+  namespace: keda
+  port: 8080

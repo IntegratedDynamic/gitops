@@ -1,0 +1,16 @@
+# Lets the parent's HTTPRoute use the interceptor's Service (a different
+# namespace) as a backend.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ .Release.Name }}-route-to-keda-interceptor
+  namespace: {{ .Values.interceptor.namespace }}
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{ .Release.Namespace }}
+  to:
+    - group: ""
+      kind: Service
+      name: {{ .Values.interceptor.service }}

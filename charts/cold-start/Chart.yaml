@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cold-start
+description: Scale-to-zero with cold start for the parent app, via the KEDA HTTP Add-on (InterceptorRoute + ScaledObject + ReferenceGrant) and a self-refreshing warm-up page served while it starts
+type: application
+version: 0.1.0

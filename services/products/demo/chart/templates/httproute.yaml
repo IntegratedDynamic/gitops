@@ -23,11 +23,24 @@ spec:
     - {{ .Values.gateway.hostname }}
   rules:
     - backendRefs:
+        {{- if .Values.coldStart.enabled }}
+        # Via the KEDA HTTP Add-on's interceptor, not straight to the app:
+        # it holds the request while the Deployment cold-starts from zero,
+        # then forwards it (routing on the Host header, which Envoy keeps).
+        # Cross-namespace -> the cold-start subchart's ReferenceGrant.
+        - group: ""
+          kind: Service
+          name: {{ .Values.coldStart.interceptor.service }}
+          namespace: {{ .Values.coldStart.interceptor.namespace }}
+          port: {{ .Values.coldStart.interceptor.port }}
+          weight: 1
+        {{- else }}
         - group: ""
           kind: Service
           name: {{ .Release.Name }}
           port: 80
           weight: 1
+        {{- end }}
       # Also a schema default (omitted matches means "match everything"),
       # written explicitly for the same reason as backendRefs above.
       matches:

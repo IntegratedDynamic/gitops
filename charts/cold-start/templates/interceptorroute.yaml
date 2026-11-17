@@ -1,0 +1,48 @@
+# Routes requests by Host through the KEDA HTTP Add-on's interceptor and
+# defines what scaling measures. Paired with scaledobject.yaml; the parent's
+# HTTPRoute must send traffic to the interceptor (otherwise this scales on
+# nothing). .Release.* resolve to the PARENT chart's release.
+#
+# coldStart.placeholder: while the target has no ready pod the interceptor
+# answers IMMEDIATELY with a small self-refreshing page (files/warming-up.html)
+# instead of holding the request -- a held request looked like a hung page,
+# then a client-side reset, in the first live test. 200 + no-store on purpose:
+# Envoy Gateway retries upstream 503s by default, and a cached placeholder
+# would outlive the cold start. The body is copied into each route at render
+# time (limit 32KB); bodyFromConfigMap can't be shared, it must live in the
+# route's own namespace.
+{{- $service := required "cold-start: .service is required" .Values.service }}
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  target:
+    service: {{ $service }}
+    port: {{ .Values.port }}
+  rules:
+    - hosts:
+        - {{ required "cold-start: .hostname is required" .Values.hostname }}
+  # requestRate, NOT concurrency: the placeholder answers instantly, so no
+  # request is ever "in flight" and concurrency stays 0 -- the scaler then
+  # never activates and the app is never woken up (confirmed live: 316
+  # placeholder-served requests, Concurrency 0, page stuck on the warm-up
+  # screen). The scaler reports the rate as a float and activates on any value
+  # > 0, so a single request is enough to scale up from zero.
+  scalingMetric:
+    requestRate:
+      targetValue: {{ .Values.requestRate.targetValue }}
+      window: {{ .Values.requestRate.window }}
+      granularity: {{ .Values.requestRate.granularity }}
+  {{- if .Values.placeholder.enabled }}
+  coldStart:
+    placeholder:
+      response:
+        statusCode: 200
+        headers:
+          Content-Type: "text/html; charset=utf-8"
+          Cache-Control: "no-store"
+        body: |
+          {{- .Files.Get "files/warming-up.html" | nindent 10 }}
+  {{- end }}

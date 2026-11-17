@@ -11,3 +11,8 @@ dependencies:
     version: 0.1.0
     repository: "file://../../../../charts/sso-guard"
     condition: auth.enabled
+  - name: cold-start
+    alias: coldStart
+    version: 0.1.0
+    repository: "file://../../../../charts/cold-start"
+    condition: coldStart.enabled

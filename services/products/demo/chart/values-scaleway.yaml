@@ -1,12 +1,16 @@
 replicas: 1
 
-resources:
-  requests:
-    cpu: 50m
-    memory: 64Mi
-  limits:
-    cpu: 100m
-    memory: 128Mi
+# Cold start: scale to zero when idle, wake on the first incoming request
+# (a warm-up page is served meanwhile). `replicas` above is ignored while this
+# is on -- KEDA owns the count. See charts/cold-start for every knob.
+coldStart:
+  enabled: true
+  # Duplicates gateway.hostname below (a subchart only sees its own block).
+  hostname: demo.staging.scalepack.fr
+  service: demo
+  port: 80
+  minReplicas: 0
+  maxReplicas: 3
 
 # No ingress-nginx on scaleway — routing goes through the shared Envoy
 # Gateway instead (services/platform/gateway/config), via HTTPRoute below.
