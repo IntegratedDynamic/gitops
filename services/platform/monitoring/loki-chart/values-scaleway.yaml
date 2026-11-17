@@ -140,3 +140,9 @@ loki:
     enabled: false
   resultsCache:
     enabled: false
+
+  # Scraped by the cluster's Prometheus (kube-prometheus-stack discovers every
+  # ServiceMonitor, see monitoring/chart's *SelectorNilUsesHelmValues: false).
+  monitoring:
+    serviceMonitor:
+      enabled: true

@@ -26,6 +26,15 @@ kube-prometheus-stack:
 
   prometheus:
     prometheusSpec:
+      # Default (true) makes Prometheus select ONLY ServiceMonitors/
+      # PodMonitors/Probes labelled release=kube-prometheus-stack, i.e. none of
+      # the ones platform charts generate. false = discover every one in the
+      # cluster, so a chart only has to enable its own serviceMonitor.
+      # ruleSelector is untouched (argocd-config-monitoring labels its
+      # PrometheusRule explicitly).
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      probeSelectorNilUsesHelmValues: false
       retention: 1d
       resources:
         requests:

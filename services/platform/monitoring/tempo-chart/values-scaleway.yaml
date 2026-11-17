@@ -64,3 +64,9 @@ tempo:
     # unused ones, and unlike Alloy's DaemonSet this is one pod, not one
     # per node, so the extra idle listeners aren't worth fighting the
     # chart's `_ports.tpl` auto-derivation to strip.
+
+  # Scraped by the cluster's Prometheus (see monitoring/chart's
+  # *SelectorNilUsesHelmValues: false). Sits at the chart root, not under the
+  # inner `tempo:` key above.
+  serviceMonitor:
+    enabled: true

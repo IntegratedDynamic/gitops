@@ -70,3 +70,6 @@ external-dns:
       matchLabelKeys:
         - scalepack.fr/sync-wave
       labelSelector: {}
+
+  serviceMonitor:
+    enabled: true

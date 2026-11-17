@@ -107,3 +107,9 @@ cert-manager:
       limits:
         cpu: 100m
         memory: 64Mi
+
+  # `prometheus.enabled` already defaults to true; only the ServiceMonitor
+  # itself needs turning on (note the lowercase `servicemonitor` key).
+  prometheus:
+    servicemonitor:
+      enabled: true
