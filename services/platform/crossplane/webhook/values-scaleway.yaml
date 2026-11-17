@@ -1,0 +1,40 @@
+# GitHub push webhook -> annotates the provider-opentofu Workspaces with
+# scalepack.fr/force-reconcile so a push to the infra repo reconciles them
+# immediately instead of at the provider's next poll. The receiver is the
+# off-the-shelf adnanh/webhook (HMAC check + ref filter in hooks.yaml, one tiny
+# curl script) -- no custom service.
+namespace: crossplane-system
+
+# Image: adnanh/webhook + curl + jq on alpine (ghcr.io/thecatlady/webhook).
+image:
+  repository: ghcr.io/thecatlady/webhook
+  tag: "2.8.2"
+
+# Only pushes to this ref trigger. Overridden per-sync by platform-apps'
+# valueParams (infraRevision), same mechanism as crossplane-config's gitRef,
+# so a feature-branch test cluster reacts to pushes on that branch.
+gitRef: main
+
+# The Workspaces the relay may annotate (RBAC is limited to exactly these via
+# resourceNames; keep in sync with crossplane/config/templates/workspace-*.yaml).
+workspaces:
+  - openbao-managed
+  - grafana-managed
+
+# HMAC secret, Terraform-owned in the infra repo's 11-secrets/openbao/managed
+# (random_password.workspace_webhook_secret), delivered by ESO.
+clusterSecretStoreName: openbao
+refreshInterval: 1h
+secret:
+  name: workspace-webhook
+  openbaoPath: apps/workspace-webhook/credentials
+  property: hmac-secret
+
+# Public route: https://hooks<hostSuffix>.<domain>/hooks/workspaces
+# (still one DNS label under domain -> covered by the gateway's wildcard cert).
+domain: staging.scalepack.fr
+hostSuffix: ""
+gateway:
+  hostPrefix: hooks
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: workspace-webhook
+description: GitHub push webhook relay that force-reconciles the Crossplane opentofu Workspaces (adnanh/webhook, no custom code)
+type: application
+version: 0.1.0
