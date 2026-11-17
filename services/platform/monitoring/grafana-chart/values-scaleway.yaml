@@ -200,6 +200,11 @@ coldStart:
   # from inside the cluster, and a Terraform provider can't read a warm-up
   # page: it goes through grafana-wake.monitoring.svc:8080, which holds the
   # request until Grafana is Ready.
+  #
+  # KNOWN LIMIT (accepted): the Workspace polls every ~10 min, each poll wakes
+  # Grafana, and scaledownPeriod is 600s, so Grafana effectively never reaches
+  # zero. Fix when wanted: a longer provider-opentofu --poll, or a git-event
+  # trigger for the Workspaces instead of polling.
   internal:
     enabled: true
     name: grafana-wake
