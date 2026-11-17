@@ -48,6 +48,14 @@ spec:
         spec:
           containers:
             - name: package-runtime
+              # How often each Workspace is re-checked for drift (default 10m).
+              # Pushes to the infra repo no longer wait for it: the
+              # workspace-webhook relay force-reconciles them on git push, so
+              # the poll is only a safety net (webhook down / drift without a
+              # push). A long value lets grafana-managed stop waking Grafana
+              # (via grafana-wake) every 10 minutes, so KEDA can scale it to zero.
+              args:
+                - --poll={{ .Values.provider.poll }}
               resources:
                 {{- toYaml .Values.provider.resources | nindent 16 }}
 # NOTE on the provider ServiceAccount's secret access (issue #101 watch-out

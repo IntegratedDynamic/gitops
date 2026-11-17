@@ -10,6 +10,8 @@ namespace: crossplane-system
 # applied.
 provider:
   name: provider-opentofu
+  # Drift re-check interval per Workspace; pushes are handled by workspace-webhook.
+  poll: 6h
   # crossplane-contrib/provider-terraform is frozen at Terraform 1.5.7 and
   # can't `init` these roots (hashicorp/vault 5.x, grafana/grafana ~> 4.0) --
   # the reason issue #102 (repo -> OpenTofu) had to land first.
