@@ -1,0 +1,22 @@
+# Scales the parent's Deployment on the interceptor's view of the traffic (see
+# interceptorroute.yaml). `external-push` + the add-on's external scaler is
+# the documented pairing for an InterceptorRoute.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  pollingInterval: 15
+  cooldownPeriod: {{ .Values.scaledownPeriod }}
+  minReplicaCount: {{ .Values.minReplicas }}
+  maxReplicaCount: {{ .Values.maxReplicas }}
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Values.targetName | default .Release.Name }}
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: {{ .Release.Name }}

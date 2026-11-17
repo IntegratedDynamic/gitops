@@ -35,3 +35,12 @@ gateway:
 # HTTPRoute.
 auth:
   enabled: false
+
+# Scale-to-zero + cold start (charts/cold-start subchart, via the KEDA HTTP
+# Add-on -- scaleway only, see values-scaleway.yaml; needs services/platform/
+# keda). Disabled by default: it requires gateway.enabled (the HTTPRoute is
+# pointed at the add-on's interceptor) and the add-on's CRDs. Same scoping
+# rule as auth: above -- the subchart only sees this block, so what it needs
+# from siblings (hostname, service) is repeated in values-scaleway.yaml.
+coldStart:
+  enabled: false

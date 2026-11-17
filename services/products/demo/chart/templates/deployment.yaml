@@ -4,7 +4,12 @@ metadata:
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if not .Values.coldStart.enabled }}
+  # Omitted when KEDA drives scaling (the cold-start subchart): the
+  # add-on's HPA owns spec.replicas, and a fixed value here would fight it
+  # on every ArgoCD selfHeal.
   replicas: {{ .Values.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ .Release.Name }}
@@ -41,12 +46,16 @@ spec:
             limits:
               cpu: {{ .Values.resources.limits.cpu }}
               memory: {{ .Values.resources.limits.memory }}
+          # Tight on purpose: with scale-to-zero (coldStart.enabled) this is most
+          # of the cold start, since a held request waits for the first
+          # Ready. Measured live: initialDelaySeconds 5 / periodSeconds 10
+          # took 13s to Ready although nginx starts in well under a second.
           readinessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: 1
+            periodSeconds: 2
           livenessProbe:
             httpGet:
               path: /
