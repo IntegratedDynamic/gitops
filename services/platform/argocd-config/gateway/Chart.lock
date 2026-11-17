@@ -1,0 +1,6 @@
+dependencies:
+- name: cold-start
+  repository: file://../../../../charts/cold-start
+  version: 0.1.0
+digest: sha256:7b6865b01e6de1a12e2537558a72325291b7c6062ca812eec9c0b10e088b84ed
+generated: "2026-11-17T15:35:04.695972+01:00"

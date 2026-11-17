@@ -153,11 +153,6 @@ dex:
         secretKeyRef:
           name: dex-credentials
           key: grafana-client-secret
-    - name: ARGO_WORKFLOWS_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: dex-credentials
-          key: argo-workflows-client-secret
     - name: CROSSVIEW_CLIENT_SECRET
       valueFrom:
         secretKeyRef:

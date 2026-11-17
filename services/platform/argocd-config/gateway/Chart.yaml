@@ -3,3 +3,10 @@ name: argocd-config-gateway
 description: Exposes the ArgoCD UI/API at argocd.staging.scalepack.fr via HTTPRoute on the shared gateway
 type: application
 version: 0.1.0
+
+dependencies:
+  - name: cold-start
+    alias: coldStart
+    version: 0.1.0
+    repository: "file://../../../../charts/cold-start"
+    condition: coldStart.enabled
