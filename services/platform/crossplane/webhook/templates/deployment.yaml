@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-webhook
+  namespace: {{ .Values.namespace }}
+  annotations:
+    # HMAC secret rotation: reloader restarts the pod (env is read at start).
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-webhook
+  template:
+    metadata:
+      labels:
+        app: workspace-webhook
+    spec:
+      serviceAccountName: workspace-webhook
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: webhook
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          # tini entrypoint of the image is kept; only args are replaced.
+          args: ["-verbose", "-template", "-hooks=/config/hooks.yaml", "-port=9000"]
+          env:
+            - name: HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: hmac-secret
+          ports:
+            - name: http
+              containerPort: 9000
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            requests: {cpu: 10m, memory: 24Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: workspace-webhook
+            defaultMode: 0555
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-webhook
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: workspace-webhook
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
