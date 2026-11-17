@@ -1,0 +1,25 @@
+apiVersion: v2
+name: keda
+description: >-
+  Wrapper chart pulling in vendor kedacore/keda (event-driven autoscaler:
+  operator + metrics apiserver + admission webhooks), managed as an
+  Application by the infrastructure repo's
+  10-cluster/platform-apps/values-keda.yaml. Ships its own CRDs
+  (ScaledObject/ScaledJob/TriggerAuthentication...) and registers the
+  external.metrics.k8s.io APIService, so it needs nothing but ArgoCD.
+
+  Also ships the KEDA HTTP Add-on (interceptor + scaler + operator, same
+  namespace, same Application): the interceptor holds an incoming request
+  while a scaled-to-zero workload cold-starts, which no plain ScaledObject
+  trigger can do. Consumers declare an HTTPScaledObject (CRD from this
+  chart) and route their HTTPRoute at the interceptor's proxy Service.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: keda
+    version: 2.21.1
+    repository: "https://kedacore.github.io/charts"
+  - name: keda-add-ons-http
+    version: 0.16.0
+    repository: "https://kedacore.github.io/charts"

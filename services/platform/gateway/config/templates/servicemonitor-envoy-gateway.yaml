@@ -1,0 +1,18 @@
+# The envoy-gateway controller's own metrics (port `metrics`, 19001) -- the
+# vendored gateway-helm chart has no ServiceMonitor switch. Lives here, in
+# gateway-config (networking-resources-apps, gated on
+# networking-controllers-apps), not in the controller chart itself, so the
+# monitoring.coreos.com CRDs are guaranteed present.
+# Data-plane (Envoy proxy) metrics are not scraped yet.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: envoy-gateway
+  namespace: envoy-gateway-system
+spec:
+  selector:
+    matchLabels:
+      control-plane: envoy-gateway
+      app.kubernetes.io/name: gateway-helm
+  endpoints:
+    - port: metrics

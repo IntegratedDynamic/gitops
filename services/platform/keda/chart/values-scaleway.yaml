@@ -1,0 +1,61 @@
+# Values nest under `keda:` (our wrapper's dependency name) -- the upstream
+# chart's own settings sit at the top level of that block (confirmed via
+# `helm show values kedacore/keda --version 2.21.1`).
+keda:
+  # Small node pool (DEV1-M, ~4Gi): the chart's own defaults (1 CPU / 1000Mi
+  # limit per component, three components) are far above what an idle KEDA
+  # needs. First-pass figures -- retune from `kubectl top pods -n keda`
+  # after the first live deploy, don't treat them as measured.
+  resources:
+    operator:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 384Mi}
+    metricServer:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 384Mi}
+    webhooks:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 192Mi}
+
+  # Each component needs BOTH `enabled` (expose its metrics port) and
+  # serviceMonitor.enabled (create the ServiceMonitor) -- the latter alone
+  # scrapes a port nobody listens on. Prometheus discovers them through
+  # monitoring/chart's *SelectorNilUsesHelmValues: false. Needs the
+  # monitoring.coreos.com CRDs: keda-apps is gated on crds-apps for that.
+  prometheus:
+    operator:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+    metricServer:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+    webhooks:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+
+# HTTP Add-on (dependency `keda-add-ons-http`). Defaults are sized for real
+# traffic -- interceptor.replicas.min is 3 (and max 50), pointless on a
+# 2-node DEV1-M pool. First-pass figures: retune from `kubectl top pods -n
+# keda` after the first live deploy, not measured.
+keda-add-ons-http:
+  interceptor:
+    replicas:
+      min: 1
+      max: 3
+    resources:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}
+  operator:
+    resources:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 192Mi}
+  scaler:
+    # Chart default is 3 -- on the 1-node pool the cluster autoscaled down to
+    # (75% memory), the third replica stayed Pending (confirmed live).
+    replicas: 1
+    resources:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 192Mi}

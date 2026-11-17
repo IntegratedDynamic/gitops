@@ -68,3 +68,8 @@ alloy:
     limits:
       cpu: 250m
       memory: 128Mi
+
+  # Scraped by the cluster's Prometheus (see monitoring/chart's
+  # *SelectorNilUsesHelmValues: false).
+  serviceMonitor:
+    enabled: true
