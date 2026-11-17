@@ -173,3 +173,33 @@ grafana:
       secretKeyRef:
         name: grafana-oidc-client-secret
         key: client-secret
+
+# Scale to zero when idle, wake on the first request (warm-up page meanwhile) --
+# charts/cold-start via KEDA's HTTP add-on, see services/platform/keda. Top
+# level, not under `grafana:` (own subchart). Grafana's PVC (RWO, SQLite)
+# survives scale-to-zero. The grafana chart omits spec.replicas only with its
+# own autoscaling on, so ArgoCD is told to leave that field to KEDA
+# (`scaledByKeda`, infra repo's values-grafana.yaml).
+#
+# ALERTING: Grafana-managed alert rules are evaluated BY the Grafana process.
+# At zero replicas nothing evaluates and nothing notifies. None exist today
+# (12-monitoring/grafana/managed only manages dashboards/datasources, and
+# Alertmanager is off). The day one does, set minReplicas: 1 here (that
+# disables scale-to-zero; the interceptor stays in the path, harmlessly).
+coldStart:
+  enabled: true
+  hostname: grafana.staging.scalepack.fr
+  service: grafana
+  port: 80
+  targetName: grafana
+  minReplicas: 0
+  maxReplicas: 1
+  # Heavy start (bleve indexer, PVC attach, OIDC): don't flap on short gaps.
+  scaledownPeriod: 600
+  # The Crossplane Workspace for 12-monitoring/grafana/managed dials Grafana
+  # from inside the cluster, and a Terraform provider can't read a warm-up
+  # page: it goes through grafana-wake.monitoring.svc:8080, which holds the
+  # request until Grafana is Ready.
+  internal:
+    enabled: true
+    name: grafana-wake

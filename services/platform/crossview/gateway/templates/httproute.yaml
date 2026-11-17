@@ -19,11 +19,22 @@ spec:
     - {{ printf "%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}
   rules:
     - backendRefs:
+        {{- if .Values.coldStart.enabled }}
+        # Via the interceptor (holds/placeholders while crossview is at 0).
+        # Cross-namespace -> the cold-start subchart's ReferenceGrant.
+        - group: ""
+          kind: Service
+          name: {{ .Values.coldStart.interceptor.service }}
+          namespace: {{ .Values.coldStart.interceptor.namespace }}
+          port: {{ .Values.coldStart.interceptor.port }}
+          weight: 1
+        {{- else }}
         - group: ""
           kind: Service
           name: {{ .Values.crossview.serviceName }}
           port: {{ .Values.crossview.servicePort }}
           weight: 1
+        {{- end }}
       # Also a schema default (omitted matches means "match everything"),
       # written explicitly for the same reason as backendRefs above.
       matches:

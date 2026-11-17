@@ -1,0 +1,35 @@
+{{- if .Values.internal.enabled }}
+{{- $name := required "cold-start: internal.name is required" .Values.internal.name }}
+# See values.yaml `internal`. No coldStart.placeholder here on purpose: the
+# caller is a program, so the request is held until the app is Ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ExternalName
+  externalName: {{ .Values.interceptor.service }}.{{ .Values.interceptor.namespace }}.svc.cluster.local
+  # No ports: an ExternalName is a bare DNS alias, so callers must dial the
+  # interceptor's own port ({{ .Values.interceptor.port }}), e.g.
+  # http://{{ $name }}.{{ .Release.Namespace }}.svc:{{ .Values.interceptor.port }}/
+---
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: {{ .Release.Name }}-internal
+  namespace: {{ .Release.Namespace }}
+spec:
+  target:
+    service: {{ required "cold-start: .service is required" .Values.service }}
+    port: {{ .Values.port }}
+  rules:
+    - hosts:
+        - {{ $name }}.{{ .Release.Namespace }}.svc
+        - {{ $name }}.{{ .Release.Namespace }}.svc.cluster.local
+  scalingMetric:
+    requestRate:
+      targetValue: {{ .Values.requestRate.targetValue }}
+      window: {{ .Values.requestRate.window }}
+      granularity: {{ .Values.requestRate.granularity }}
+{{- end }}
