@@ -34,6 +34,16 @@ requestRate:
 placeholder:
   enabled: true
 
+# In-cluster callers that can't read a warm-up page (a Terraform provider, a
+# scraper...). Creates an ExternalName Service `<name>` in the release
+# namespace pointing at the interceptor, plus a SECOND InterceptorRoute
+# matching `<name>.<ns>.svc` WITHOUT placeholder: the request is held until
+# the app is Ready, then forwarded. Point such callers at that Service instead
+# of the app's own. Both routes are triggers of the one ScaledObject.
+internal:
+  enabled: false
+  name: ""
+
 # KEDA HTTP Add-on's interceptor (services/platform/keda). The parent's
 # HTTPRoute points its backendRef at this Service.
 interceptor:

@@ -19,3 +19,8 @@ dependencies:
   - name: grafana
     version: 12.4.1
     repository: https://grafana-community.github.io/helm-charts
+  - name: cold-start
+    alias: coldStart
+    version: 0.1.0
+    repository: "file://../../../../charts/cold-start"
+    condition: coldStart.enabled

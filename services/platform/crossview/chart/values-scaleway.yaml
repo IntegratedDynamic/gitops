@@ -131,3 +131,22 @@ crossview:
     limits:
       cpu: "1"
       memory: 2Gi
+
+# Scale to zero when idle, wake on the first request (warm-up page meanwhile) --
+# charts/cold-start via KEDA's HTTP add-on, see services/platform/keda. Sits at
+# the top level (not under `crossview:`): it is its own subchart. The upstream
+# chart always renders spec.replicas, so ArgoCD is told to leave that field to
+# KEDA (`scaledByKeda` in the infra repo's values-crossplane.yaml).
+# The HTTPRoute (sibling `gateway` chart) points at the interceptor when
+# coldStart.enabled is set there too -- keep the two flags in step.
+coldStart:
+  enabled: true
+  hostname: crossview.staging.scalepack.fr
+  service: crossview-service
+  port: 80
+  targetName: crossview
+  minReplicas: 0
+  maxReplicas: 1
+  # Idle cost is tiny (2m CPU / 36Mi) but a wake is expensive: the first
+  # /api/managed fetch runs ~3.5 min (see resources above), so don't flap.
+  scaledownPeriod: 600

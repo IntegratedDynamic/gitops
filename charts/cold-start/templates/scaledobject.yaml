@@ -20,3 +20,9 @@ spec:
       metadata:
         scalerAddress: keda-add-ons-http-external-scaler.keda:9090
         interceptorRoute: {{ .Release.Name }}
+    {{- if .Values.internal.enabled }}
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: {{ .Release.Name }}-internal
+    {{- end }}

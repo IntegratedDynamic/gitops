@@ -62,4 +62,4 @@ workspaces:
   grafanaManaged:
     externalName: 12-monitoring-grafana-managed-dev
     entrypoint: 12-monitoring/grafana/managed
-    grafanaUrl: http://grafana.monitoring.svc:80/
+    grafanaUrl: http://grafana-wake.monitoring.svc:8080/

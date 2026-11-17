@@ -2,5 +2,8 @@ dependencies:
 - name: grafana
   repository: https://grafana-community.github.io/helm-charts
   version: 12.4.1
-digest: sha256:4a5d1855302d0a5dbc8ef012e992da32208241429058bb4de12e7b3989038e11
-generated: "2026-08-14T17:46:47.797411+02:00"
+- name: cold-start
+  repository: file://../../../../charts/cold-start
+  version: 0.1.0
+digest: sha256:ee16de8a76c4ae242c2e9cd103e34bec2c199ee7678ebfba444cc44782b662ac
+generated: "2026-11-17T15:22:56.69113+01:00"

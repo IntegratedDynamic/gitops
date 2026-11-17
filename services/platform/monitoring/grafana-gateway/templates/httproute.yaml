@@ -35,11 +35,23 @@ spec:
     - {{ printf "%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}
   rules:
     - backendRefs:
+        {{- if .Values.coldStart.enabled }}
+        # Via the KEDA HTTP add-on's interceptor (scale to zero, see
+        # ../grafana-chart/values-scaleway.yaml's coldStart). Cross-namespace
+        # -> the cold-start subchart's ReferenceGrant.
+        - group: ""
+          kind: Service
+          name: {{ .Values.coldStart.interceptor.service }}
+          namespace: {{ .Values.coldStart.interceptor.namespace }}
+          port: {{ .Values.coldStart.interceptor.port }}
+          weight: 1
+        {{- else }}
         - group: ""
           kind: Service
           name: {{ .Values.grafanaServer.serviceName }}
           port: {{ .Values.grafanaServer.servicePort }}
           weight: 1
+        {{- end }}
       # Also a schema default (omitted matches means "match everything"),
       # written explicitly for the same reason as backendRefs above.
       matches:
