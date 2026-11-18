@@ -45,8 +45,9 @@ secret:
   openbaoPath: apps/workspace-webhook/credentials
   property: hmac-secret
 
-# Slack notification on each matching push (Sensor trigger notify-slack). The
-# bot must be invited to the channel. Token: OpenBao apps/workspace-events/slack.
+# Slack messages (HTTP triggers calling chat.postMessage): on each matching push
+# (Sensor workspaces) and on each Workspace apply result (Sensor workspace-applies).
+# The bot must be invited to the channel. Token: OpenBao apps/workspace-events/slack.
 slack:
   channel: "#scalepack-events"
   secretName: workspace-events-slack

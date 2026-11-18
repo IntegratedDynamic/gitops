@@ -23,6 +23,11 @@ spec:
             type: string
             value:
               - refs/heads/{{ .Values.gitRef }}
+          # Deleting the branch (e.g. after a merge) pushes `after` = 40 zeros.
+          - path: body.deleted
+            type: bool
+            value:
+              - "false"
   # One trigger, one Job per push. Argo Events' k8s trigger can only patch
   # NAMESPACED objects (it looks the target up in the sensor's namespace; the
   # Workspaces are cluster-scoped, so a patch trigger dies with "forbidden ...
@@ -81,17 +86,29 @@ spec:
               dest: spec.template.spec.containers.0.args.{{ add 3 (len .Values.workspaces) }}
               operation: append
     # Independent of the reconcile trigger: a Slack failure (bad token, channel)
-    # never blocks the annotation. Fields come from GitHub's push payload.
+    # never blocks the annotation. Argo Events' own `slack` trigger ignores its
+    # `parameters` (the message stays static), hence a plain HTTP call to Slack.
     - template:
-        name: notify-slack
-        slack:
-          channel: {{ .Values.slack.channel | quote }}
-          slackToken:
-            name: {{ .Values.slack.secretName }}
-            key: token
-          message: "placeholder"
-          parameters:
+        name: slack-push
+        http:
+          url: https://slack.com/api/chat.postMessage
+          method: POST
+          headers:
+            Content-Type: application/json; charset=utf-8
+          secureHeaders:
+            - name: Authorization
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.slack.secretName }}
+                  key: authorization
+          payload:
             - src:
                 dependencyName: push
-                dataTemplate: {{ `"{{ .Input.body.pusher.name }} a pushé sur {{ .Input.body.ref }} : {{ .Input.body.head_commit.message }} ({{ .Input.body.head_commit.url }}) -- reconcile des Workspaces déclenché"` }}
-              dest: slack.message
+                dataTemplate: {{ .Values.slack.channel | quote }}
+              dest: channel
+            - src:
+                dependencyName: push
+                dataTemplate: |-
+                  {{ `:inbox_tray: Push sur *{{ trimPrefix "refs/heads/" .Input.body.ref }}* : <{{ .Input.body.head_commit.url }}|*{{ trunc 7 .Input.body.after }}*> {{ .Input.body.head_commit.message | splitList "\n" | first | replace "&" "&amp;" | replace "<" "&lt;" | replace ">" "&gt;" }}
+                  Reconcile des Workspaces déclenché.` }}
+              dest: text
