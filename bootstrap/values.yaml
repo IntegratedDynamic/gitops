@@ -45,4 +45,4 @@ scalewayApps:
   # app-of-apps: Firefly III, ...), kept out of this repo so personal and
   # platform stay apart. repoURL/revision override this chart's own; the
   # `revision` parameter is what its children track.
-  - {name: personal-apps, namespace: argocd, chartPath: bootstrap, valueFile: values.yaml, wave: "9", repoURL: "https://github.com/nbrieussel/homelab-apps.git", revision: main}
+  - {name: personal-apps, namespace: argocd, chartPath: bootstrap, valueFile: values.yaml, wave: "9", repoURL: "https://github.com/nbrieussel/homelab-apps.git", revision: feature/firefly-iii, parameters: [{name: revision, value: feature/firefly-iii}]}
