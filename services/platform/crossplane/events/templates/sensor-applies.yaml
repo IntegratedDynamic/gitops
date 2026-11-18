@@ -1,0 +1,57 @@
+# One Slack message per Workspace apply result. Reasons are provider-opentofu's:
+# UpdatedExternalResource = the `tofu apply` succeeded; CannotUpdateExternalResource
+# / CannotConnectToProvider = it failed (error text in the Event message).
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: workspace-applies
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  eventBusName: default
+  template:
+    container:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 96Mi}
+  dependencies:
+    - name: applied
+      eventSourceName: workspace-applies
+      eventName: events
+      filters:
+        data:
+          - path: body.involvedObject.kind
+            type: string
+            value:
+              - Workspace
+          - path: body.reason
+            type: string
+            value:
+              - UpdatedExternalResource
+              - CannotUpdateExternalResource
+              - CannotConnectToProvider
+  triggers:
+    - template:
+        name: slack-apply
+        http:
+          url: https://slack.com/api/chat.postMessage
+          method: POST
+          headers:
+            Content-Type: application/json; charset=utf-8
+          secureHeaders:
+            - name: Authorization
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.slack.secretName }}
+                  key: authorization
+          payload:
+            - src:
+                dependencyName: applied
+                dataTemplate: {{ .Values.slack.channel | quote }}
+              dest: channel
+            - src:
+                dependencyName: applied
+                dataTemplate: |-
+                  {{ `{{ if eq .Input.body.reason "UpdatedExternalResource" }}:white_check_mark: *{{ .Input.body.involvedObject.name }}* : apply terminé{{ else }}:x: *{{ .Input.body.involvedObject.name }}* : échec ({{ .Input.body.reason }}) — {{ .Input.body.message | trunc 400 | replace "&" "&amp;" | replace "<" "&lt;" | replace ">" "&gt;" }}{{ end }}` }}
+              dest: text

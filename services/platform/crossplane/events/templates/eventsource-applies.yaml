@@ -1,0 +1,31 @@
+# Watches the Kubernetes Events that provider-opentofu records on the (cluster-
+# scoped) Workspaces after each `tofu apply` -- they land in the `default`
+# namespace. The Sensor workspace-applies filters the interesting ones.
+# afterStart: only Events created after this pod started, so a restart never
+# replays old results to Slack.
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: workspace-applies
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: workspace-events-eventsource
+    container:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 96Mi}
+  resource:
+    events:
+      namespace: default
+      group: ""
+      version: v1
+      resource: events
+      eventTypes:
+        - ADD
+        - UPDATE
+      filter:
+        afterStart: true
