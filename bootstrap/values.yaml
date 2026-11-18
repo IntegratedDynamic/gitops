@@ -40,3 +40,9 @@ repoURL: https://github.com/IntegratedDynamic/gitops.git
 scalewayApps:
   # ── wave 8 ────────────────────────────────────────────────────────────
   - {name: demo, namespace: demo, chartPath: services/products/demo/chart, valueFile: values-scaleway.yaml, wave: "8", syncWaveLabelPaths: ['syncWave']}
+  # ── wave 9: personal apps ─────────────────────────────────────────────
+  # Entry point of the SEPARATE public repo nbrieussel/homelab-apps (its own
+  # app-of-apps: Firefly III, ...), kept out of this repo so personal and
+  # platform stay apart. repoURL/revision override this chart's own; the
+  # `revision` parameter is what its children track.
+  - {name: personal-apps, namespace: argocd, chartPath: bootstrap, valueFile: values.yaml, wave: "9", repoURL: "https://github.com/nbrieussel/homelab-apps.git", revision: main}
