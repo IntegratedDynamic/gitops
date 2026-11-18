@@ -33,8 +33,10 @@ spec:
   project: default
 
   source:
-    repoURL: {{ $.Values.repoURL }}
-    targetRevision: {{ $.Values.revision }}
+    # Per-entry repoURL/revision override: lets an entry point at ANOTHER repo
+    # (the personal homelab-apps app-of-apps) instead of this one.
+    repoURL: {{ .repoURL | default $.Values.repoURL }}
+    targetRevision: {{ .revision | default $.Values.revision }}
     path: {{ .chartPath }}
     helm:
       valueFiles:
@@ -47,6 +49,15 @@ spec:
       # objects, racing the dedicated CRDs app that's supposed to gate them.
       skipCrds: true
       {{- end }}
+      {{- if or .syncWaveLabelPaths .parameters }}
+      parameters:
+        {{- range .parameters }}
+        # Free-form extra Helm parameters for this entry ({name, value}).
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+          forceString: true
+        {{- end }}
+      {{- end }}
       {{- if .syncWaveLabelPaths }}
       # Pushes this app's own `wave` (this entry's single source of truth)
       # into whichever nested values path(s) its chart's own values file
@@ -57,7 +68,6 @@ spec:
       # app instead of special-casing chart shapes here. Each chart's
       # topologySpreadConstraints then only need matchLabelKeys (see that
       # chart's own values file) — no second wave-number copy to drift.
-      parameters:
         {{- range .syncWaveLabelPaths }}
         - name: {{ . }}
           value: {{ $app.wave | quote }}
