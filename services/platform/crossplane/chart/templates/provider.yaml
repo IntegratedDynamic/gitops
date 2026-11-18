@@ -50,7 +50,7 @@ spec:
             - name: package-runtime
               # How often each Workspace is re-checked for drift (default 10m).
               # Pushes to the infra repo no longer wait for it: the
-              # workspace-webhook relay force-reconciles them on git push, so
+              # workspace-events pipeline (Argo Events) force-reconciles them on git push, so
               # the poll is only a safety net (webhook down / drift without a
               # push). A long value lets grafana-managed stop waking Grafana
               # (via grafana-wake) every 10 minutes, so KEDA can scale it to zero.

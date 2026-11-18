@@ -1,0 +1,97 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: workspaces
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: workspace-events-sensor
+    container:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 96Mi}
+  dependencies:
+    - name: push
+      eventSourceName: workspaces
+      eventName: workspaces
+      filters:
+        data:
+          - path: body.ref
+            type: string
+            value:
+              - refs/heads/{{ .Values.gitRef }}
+  # One trigger, one Job per push. Argo Events' k8s trigger can only patch
+  # NAMESPACED objects (it looks the target up in the sensor's namespace; the
+  # Workspaces are cluster-scoped, so a patch trigger dies with "forbidden ...
+  # create" -- confirmed live), so it creates a Job that runs `kubectl annotate`
+  # instead. The Job is the audit trail (its logs reach Loki).
+  triggers:
+    - template:
+        name: reconcile-workspaces
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                generateName: reconcile-workspaces-
+              spec:
+                ttlSecondsAfterFinished: 600
+                backoffLimit: 2
+                template:
+                  spec:
+                    serviceAccountName: workspace-events-reconciler
+                    restartPolicy: Never
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 65534
+                      seccompProfile:
+                        type: RuntimeDefault
+                    containers:
+                      - name: kubectl
+                        image: "{{ .Values.kubectl.image }}"
+                        command: [kubectl]
+                        args:
+                          - annotate
+                          - workspace.opentofu.upbound.io
+                          {{- range .Values.workspaces }}
+                          - {{ . }}
+                          {{- end }}
+                          - --overwrite
+                          # Completed below with the pushed commit SHA, which
+                          # changes with every push -- all the annotation needs
+                          # to retrigger a Workspace.
+                          - "scalepack.fr/force-reconcile="
+                        resources:
+                          requests: {cpu: 10m, memory: 32Mi}
+                          limits: {memory: 128Mi}
+                        securityContext:
+                          allowPrivilegeEscalation: false
+                          readOnlyRootFilesystem: true
+                          capabilities:
+                            drop: ["ALL"]
+          parameters:
+            - src:
+                dependencyName: push
+                dataKey: body.after
+              dest: spec.template.spec.containers.0.args.{{ add 3 (len .Values.workspaces) }}
+              operation: append
+    # Independent of the reconcile trigger: a Slack failure (bad token, channel)
+    # never blocks the annotation. Fields come from GitHub's push payload.
+    - template:
+        name: notify-slack
+        slack:
+          channel: {{ .Values.slack.channel | quote }}
+          slackToken:
+            name: {{ .Values.slack.secretName }}
+            key: token
+          message: "placeholder"
+          parameters:
+            - src:
+                dependencyName: push
+                dataTemplate: {{ `"{{ .Input.body.pusher.name }} a pushé sur {{ .Input.body.ref }} : {{ .Input.body.head_commit.message }} ({{ .Input.body.head_commit.url }}) -- reconcile des Workspaces déclenché"` }}
+              dest: slack.message

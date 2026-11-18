@@ -1,0 +1,10 @@
+# Values nest under `argo-events:` (our wrapper's dependency name).
+argo-events:
+  # The chart's `crds.keep: true` default annotates CRDs helm.sh/resource-policy:
+  # keep -- harmless under ArgoCD (it never runs helm uninstall).
+  controller:
+    # First-pass figures for the small DEV1-M pool -- retune from
+    # `kubectl top pods -n argo-events` after the first live deploy.
+    resources:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 192Mi}

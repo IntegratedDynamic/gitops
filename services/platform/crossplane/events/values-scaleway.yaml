@@ -1,0 +1,62 @@
+# Argo Events pipeline: GitHub push -> EventSource (HMAC check) -> EventBus
+# (JetStream, durable) -> Sensor (event + branch filter) -> patches the
+# scalepack.fr/force-reconcile annotation on each Workspace, so a push to the
+# infra repo reconciles them now instead of at provider-opentofu's next poll.
+# Replaces the adnanh/webhook relay (crossplane/webhook). The controller itself
+# is the separate argo-events app (platform/argo-events/chart).
+namespace: crossplane-system
+
+# Pushes to this ref trigger. Overridden per-sync by platform-apps'
+# valueParams (infraRevision), same mechanism as crossplane-config's gitRef,
+# so a feature-branch test cluster reacts to pushes on that branch.
+gitRef: main
+
+github:
+  owner: IntegratedDynamic
+  repository: infrastructure
+
+# The Workspaces the Sensor may annotate (RBAC is limited to exactly these via
+# resourceNames; keep in sync with crossplane/config/templates/workspace-*.yaml).
+workspaces:
+  - openbao-managed
+  - grafana-managed
+
+# Runs `kubectl annotate` in the Job the Sensor creates per push (matches the
+# cluster's Kubernetes minor).
+kubectl:
+  image: registry.k8s.io/kubectl:v1.35.9
+
+eventBus:
+  # 1 node on the 1-node homelab pool (chart default is 3). Persistent, so a
+  # queued event survives a pod restart until a Sensor has consumed it.
+  replicas: 1
+  natsVersion: "2.10.29"
+  volumeSize: 5Gi
+  # Message retention in the stream.
+  maxAge: 24h
+
+# HMAC secret, Terraform-owned in the infra repo's 11-secrets/openbao/managed
+# (random_password.workspace_webhook_secret), delivered by ESO. Same OpenBao
+# path as the former workspace-webhook relay.
+clusterSecretStoreName: openbao
+refreshInterval: 1h
+secret:
+  name: workspace-events
+  openbaoPath: apps/workspace-webhook/credentials
+  property: hmac-secret
+
+# Slack notification on each matching push (Sensor trigger notify-slack). The
+# bot must be invited to the channel. Token: OpenBao apps/workspace-events/slack.
+slack:
+  channel: "#scalepack-events"
+  secretName: workspace-events-slack
+  openbaoPath: apps/workspace-events/slack
+
+# Public route: https://hooks<hostSuffix>.<domain>/hooks/workspaces -- the same
+# URL the relay used, so GitHub's webhook config is unchanged.
+domain: staging.scalepack.fr
+hostSuffix: ""
+gateway:
+  hostPrefix: hooks
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway
