@@ -1,0 +1,41 @@
+# No apiToken/githubApp on purpose: without credentials the source does not try
+# to register the hook with GitHub (the webhook is configured once on the repo,
+# URL unchanged from the former relay) and only validates incoming requests
+# against webhookSecret.
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: workspaces
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: workspace-events-eventsource
+    container:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 96Mi}
+  service:
+    ports:
+      - port: 12000
+        targetPort: 12000
+  github:
+    workspaces:
+      repositories:
+        - owner: {{ .Values.github.owner }}
+          names:
+            - {{ .Values.github.repository }}
+      events:
+        - push
+      contentType: json
+      webhookSecret:
+        name: {{ .Values.secret.name }}
+        key: {{ .Values.secret.property }}
+      webhook:
+        endpoint: /hooks/workspaces
+        port: "12000"
+        method: POST
+        # Informational here (no hook registration), required by the schema.
+        url: {{ printf "https://%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}

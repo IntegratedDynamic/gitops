@@ -1,0 +1,5 @@
+apiVersion: v2
+name: workspace-events
+description: Argo Events pipeline (EventBus + GitHub EventSource + Sensor) that force-reconciles the Crossplane opentofu Workspaces on a push; replaces the adnanh/webhook relay
+type: application
+version: 0.1.0

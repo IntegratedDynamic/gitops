@@ -1,0 +1,19 @@
+# Named `default`: EventSource/Sensor pick it up without an eventBusName.
+apiVersion: argoproj.io/v1alpha1
+kind: EventBus
+metadata:
+  name: default
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  jetstream:
+    version: {{ .Values.eventBus.natsVersion | quote }}
+    replicas: {{ .Values.eventBus.replicas }}
+    persistence:
+      accessMode: ReadWriteOnce
+      volumeSize: {{ .Values.eventBus.volumeSize }}
+    # The stream's replica count may not exceed the node count (chart default 3).
+    streamConfig: |
+      maxAge: {{ .Values.eventBus.maxAge }}
+      replicas: {{ .Values.eventBus.replicas }}

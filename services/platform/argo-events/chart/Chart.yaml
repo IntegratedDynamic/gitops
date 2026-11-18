@@ -1,0 +1,15 @@
+apiVersion: v2
+name: argo-events
+description: >-
+  Wrapper chart pulling in vendor argoproj/argo-events (controller-manager +
+  CRDs for EventBus/EventSource/Sensor), managed as an Application by the
+  infrastructure repo's 10-cluster/platform-apps/values-events.yaml. Only the
+  controller lives here; the EventBus/EventSource/Sensor of each consumer ship
+  with that consumer's own chart (e.g. crossplane/events).
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: argo-events
+    version: 2.4.28
+    repository: "https://argoproj.github.io/argo-helm"

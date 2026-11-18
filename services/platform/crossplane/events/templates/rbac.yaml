@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workspace-events-eventsource
+  namespace: {{ .Values.namespace }}
+---
+# The EventSource reads its webhook secret through the API.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workspace-events-eventsource
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.secret.name | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workspace-events-eventsource
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workspace-events-eventsource
+subjects:
+  - kind: ServiceAccount
+    name: workspace-events-eventsource
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workspace-events-sensor
+  namespace: {{ .Values.namespace }}
+---
+# The Sensor only creates the reconcile Jobs; it never touches a Workspace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workspace-events-sensor
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workspace-events-sensor
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workspace-events-sensor
+subjects:
+  - kind: ServiceAccount
+    name: workspace-events-sensor
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workspace-events-reconciler
+  namespace: {{ .Values.namespace }}
+---
+# Workspaces are cluster-scoped, hence ClusterRole; resourceNames pins it to
+# exactly these objects and verbs (no list/watch/create/delete). `get` is needed
+# too: `kubectl annotate` reads the object before patching it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workspace-events-reconciler
+rules:
+  - apiGroups: ["opentofu.upbound.io"]
+    resources: ["workspaces"]
+    resourceNames: {{ .Values.workspaces | toJson }}
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workspace-events-reconciler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workspace-events-reconciler
+subjects:
+  - kind: ServiceAccount
+    name: workspace-events-reconciler
+    namespace: {{ .Values.namespace }}
