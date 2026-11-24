@@ -1,0 +1,49 @@
+# Drops the identity headers authentik's outpost sets, when a CLIENT sends them,
+# before anything else looks at the request.
+#
+# Those headers carry the identity authentik's forward-auth decided on
+# (services: charts/sso-guard, and any app that trusts them -- Firefly III's
+# remote_user_guard signs the user in from x-authentik-email with NO validation
+# of its own). Envoy's ext-auth filter overwrites such a header only when
+# authentik RETURNS it; a header the client invented would otherwise travel
+# through untouched on any path where authentik does not return that header
+# (reproduced on a local kind cluster: a forged email, groups and username all
+# reached the backend). Stripping on the way in makes "the header was set by
+# authentik" true by construction, for every app behind this gateway.
+#
+# `earlyRequestHeaders` runs before routing and before the ext-auth filter, so
+# the identity headers authentik adds afterwards are not affected.
+#
+# An EXPLICIT list, never a prefix like `x-authentik-`: authentik's own web UI
+# sends `X-authentik-CSRF` on every write made from a signed-in session, and a
+# prefix removes it too -- every such write then failed with "CSRF Failed: CSRF
+# token missing" (first deployed that way; found by an end-to-end passkey
+# enrolment, which the anonymous login flow did not reveal). These are the
+# headers the outpost sets, from its source (internal/outpost/proxyv2/
+# application/mode_common.go, authentik 2026.8): add to this list if an upgrade
+# adds one, or if a provider is given extra headers through a property mapping.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ .Values.gatewayName }}-strip-identity-headers
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+  headers:
+    earlyRequestHeaders:
+      remove:
+        - x-authentik-username
+        - x-authentik-groups
+        - x-authentik-entitlements
+        - x-authentik-email
+        - x-authentik-name
+        - x-authentik-uid
+        - x-authentik-jwt
+        - x-authentik-meta-jwks
+        - x-authentik-meta-outpost
+        - x-authentik-meta-provider
+        - x-authentik-meta-app
+        - x-authentik-meta-version

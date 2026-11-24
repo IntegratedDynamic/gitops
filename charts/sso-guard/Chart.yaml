@@ -1,5 +1,11 @@
 apiVersion: v2
 name: sso-guard
-description: Gates the parent app's own HTTPRoute behind GitHub org SSO via Dex (SecurityPolicy + ReferenceGrant)
+description: >-
+  Puts the parent app behind authentik's forward-auth: an Envoy Gateway
+  extAuth SecurityPolicy on the parent's HTTPRoute, the per-host
+  /outpost.goauthentik.io route authentik's login callback needs, and the
+  ReferenceGrant letting both reach authentik's Service. WHO may use the app
+  is decided in authentik (14-sso/managed: a group binding on the
+  application), not here.
 type: application
-version: 0.1.0
+version: 0.2.0

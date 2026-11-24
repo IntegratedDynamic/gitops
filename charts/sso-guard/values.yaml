@@ -1,0 +1,25 @@
+# An app includes this chart as a subchart (alias `auth`, condition
+# `auth.enabled`) and sets only what is its own:
+#
+#   auth:
+#     enabled: true
+#     hostname: demo.staging.scalepack.fr   # the parent HTTPRoute's hostname
+#
+# (duplicated here because a subchart only sees its own values block).
+# The app must ALSO be declared in the infra repo's 14-sso/managed
+# (`applications`), with the same host: that is where the proxy provider,
+# the application and its group bindings -- i.e. who may use it, and whose
+# "My applications" page lists it -- live.
+hostname: ""
+
+# authentik's in-cluster Service, referenced directly (not through the public
+# sso.<domain> route) so the auth check never depends on external DNS or the
+# Gateway being up -- same reason the old Dex-based policy did.
+authentikServiceName: authentik-server
+authentikServiceNamespace: authentik
+authentikServicePort: 80
+
+# The Gateway the parent's HTTPRoute is attached to (the outpost route below
+# must sit on the same one, https listener only).
+gatewayName: scaleway-gateway
+gatewayNamespace: gateway

@@ -1,9 +1,9 @@
 dependencies:
 - name: sso-guard
   repository: file://../../../../charts/sso-guard
-  version: 0.1.0
+  version: 0.2.0
 - name: cold-start
   repository: file://../../../../charts/cold-start
   version: 0.1.0
-digest: sha256:c3fe28b63f3723ca8a7cd8aa7ce7f071553fafd8da76d9b6556ff31f5b63ff9b
-generated: "2026-11-17T14:51:09.909472+01:00"
+digest: sha256:58b4a9d88e74390184ed09cf3d6e39f491d65672f96907c7810874a45cd8af6c
+generated: "2026-11-24T16:22:02.004393+01:00"

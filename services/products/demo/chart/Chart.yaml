@@ -8,7 +8,7 @@ appVersion: "1.27"
 dependencies:
   - name: sso-guard
     alias: auth
-    version: 0.1.0
+    version: 0.2.0
     repository: "file://../../../../charts/sso-guard"
     condition: auth.enabled
   - name: cold-start

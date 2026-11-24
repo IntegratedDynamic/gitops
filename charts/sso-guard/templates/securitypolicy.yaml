@@ -1,8 +1,17 @@
-# Gates the parent app's own HTTPRoute behind GitHub org SSO (via Dex, see
-# bootstrap/values.yaml). Envoy Gateway's native OIDC filter requires
-# redirectURL to live on that HTTPRoute's own hostname — one SecurityPolicy
-# per protected app, not a shared policy. .Release.Name/.Release.Namespace
-# here resolve to the PARENT chart's release (subcharts share .Release).
+# Forward-auth: Envoy asks authentik's embedded outpost about every request
+# on the parent's HTTPRoute before forwarding it. The outpost answers with
+# either "allowed" (+ identity headers) or a redirect to the login flow, so
+# unauthenticated browsers, and API clients too, get a decision with no
+# per-app OIDC client, redirectURL or secret.
+#
+# .Release.Name/.Release.Namespace resolve to the PARENT chart's release
+# (subcharts share .Release); the parent's HTTPRoute is named after it.
+#
+# Settings found necessary on kind (spike behind infra issue #135):
+#  - headersToExtAuth must carry `cookie`: for an HTTP ext-auth service Envoy
+#    forwards only Host/Method/Path/Content-Length/Authorization by default,
+#    so without it the outpost never sees the session and loops on login.
+#  - the ext-auth path below is hardcoded in authentik for Envoy.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:
@@ -13,79 +22,33 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: {{ .Release.Name }}
-  oidc:
-    provider:
-      issuer: {{ .Values.issuer | quote }}
-      # Talks to Dex's in-cluster Service directly rather than resolving the
-      # issuer hostname — avoids depending on external-dns/Scaleway DNS
-      # propagation (this caused a real outage on cluster restart: the
-      # Gateway LB IP changes, and envoy-gateway retried OIDC discovery
-      # before the new record propagated, wedging the policy Invalid).
-      #
-      # backendRefs' group/kind/weight below (and clientSecret's/jwt's
-      # further down): written explicitly to match the Gateway API's own
-      # schema defaults, avoiding permanent OutOfSync in ArgoCD (confirmed
-      # live 2026-08-11).
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - cookie
+      - x-forwarded-proto
+      - x-forwarded-for
+      - user-agent
+    http:
+      # group/kind/weight written explicitly to match the Gateway API's own
+      # schema defaults, avoiding permanent OutOfSync in ArgoCD.
       backendRefs:
         - group: ""
           kind: Service
-          name: {{ .Values.dexServiceName }}
-          namespace: {{ .Values.dexServiceNamespace }}
-          port: {{ .Values.dexServicePort }}
+          name: {{ .Values.authentikServiceName }}
+          namespace: {{ .Values.authentikServiceNamespace }}
+          port: {{ .Values.authentikServicePort }}
           weight: 1
-      # Spelled out explicitly (Dex's standard OIDC paths) so the
-      # controller's admission-time validation skips its own discovery
-      # fetch entirely — that fetch ignores backendRefs and used plain DNS.
-      authorizationEndpoint: "{{ .Values.issuer }}/auth"
-      tokenEndpoint: "{{ .Values.issuer }}/token"
-    clientID: {{ .Values.clientID | quote }}
-    clientSecret:
-      group: ""
-      kind: Secret
-      name: {{ .Values.clientSecretName }}
-    refreshToken: true
-    redirectURL: "https://{{ .Values.hostname }}/oauth2/callback"
-    logoutPath: "/oauth2/logout"
-    cookieDomain: {{ .Values.cookieDomain | quote }}
-  {{- if .Values.requiredGroup }}
-    # groups scope + a fixed idToken cookie name so the jwt/authorization
-    # blocks below can read the group claim back out of it.
-    scopes:
-      - groups
-    cookieNames:
-      idToken: {{ .Release.Name }}-id-token
-  # Restricts access to members of one GitHub team (org:team, as Dex's
-  # github connector formats the groups claim) — on top of the org-wide
-  # login gate above. Everything stays in this policy; the app itself
-  # never sees or checks group membership.
-  jwt:
-    providers:
-      - name: dex
-        issuer: {{ .Values.issuer | quote }}
-        remoteJWKS:
-          uri: "{{ .Values.issuer }}/keys"
-          cacheDuration: 300s
-          backendRefs:
-            - group: ""
-              kind: Service
-              name: {{ .Values.dexServiceName }}
-              namespace: {{ .Values.dexServiceNamespace }}
-              port: {{ .Values.dexServicePort }}
-              weight: 1
-        extractFrom:
-          cookies:
-            - {{ .Release.Name }}-id-token
-  authorization:
-    defaultAction: Deny
-    rules:
-      - name: allow-required-group
-        action: Allow
-        principal:
-          jwt:
-            provider: dex
-            claims:
-              - name: groups
-                valueType: StringArray
-                values:
-                  - {{ .Values.requiredGroup | quote }}
-  {{- end }}
+      path: /outpost.goauthentik.io/auth/envoy
+      headersToBackend:
+        - x-authentik-username
+        - x-authentik-groups
+        - x-authentik-email
+        - x-authentik-name
+        - x-authentik-uid
+        - x-authentik-jwt
+        - x-authentik-meta-jwks
+        - x-authentik-meta-outpost
+        - x-authentik-meta-provider
+        - x-authentik-meta-app
+        - x-authentik-meta-version
