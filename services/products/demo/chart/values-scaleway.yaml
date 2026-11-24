@@ -23,30 +23,17 @@ gateway:
   gatewayName: scaleway-gateway
   gatewayNamespace: gateway
 
-# demo is the guinea pig for GitHub org SSO — see services/platform/dex/gateway and
-# bootstrap/values.yaml. Its callback URL is registered in Dex's
-# staticClients.envoy-gateway.redirectURIs.
+# demo is the guinea pig for authentik's forward-auth (infra issue #135) --
+# see charts/sso-guard. Who may use it is NOT set here: it is the group
+# bindings of its `demo` application in the infra repo's 14-sso/managed
+# (env/14-sso-managed-dev.tfvars), which also decide whose "My applications"
+# page lists it.
 auth:
   enabled: true
-  # Duplicates gateway.hostname above — the sso-guard subchart only sees
+  # Duplicates gateway.hostname above -- the sso-guard subchart only sees
   # this auth: block (Helm scopes subchart values to the parent key
   # matching its dependency name), not sibling keys like gateway.hostname.
   hostname: demo.staging.scalepack.fr
-  issuer: https://auth.staging.scalepack.fr
-  clientID: envoy-gateway
-  clientSecretName: demo-sso-client-secret
-  cookieDomain: staging.scalepack.fr
-  clusterSecretStoreName: openbao
-  openbaoPath: apps/dex/credentials
-  # Service created by bootstrap/values.yaml — referenced directly so
-  # OIDC discovery/token calls don't depend on external DNS (see
-  # charts/sso-guard/templates/securitypolicy.yaml).
-  dexServiceName: dex
-  dexServiceNamespace: gateway
-  dexServicePort: 5556
-  # Restricts demo further to members of this GitHub team (on top of the
-  # org-wide login gate) — see charts/sso-guard/templates/securitypolicy.yaml.
-  requiredGroup: "IntegratedDynamic:Guest"
 
 # syncWave: fallback default, not the source of truth —
 # bootstrap/templates/scaleway.yaml injects this app's real `wave` here

@@ -1,0 +1,32 @@
+# The outpost's own endpoints (login callback, sign-out) must reach it
+# DIRECTLY on the protected host: the callback request cannot itself go
+# through the extAuth check that is waiting for it (it 400s -- reproduced on
+# kind). A separate route, not targeted by the SecurityPolicy, with a more
+# specific path match than the parent's catch-all `/`.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}-outpost
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gatewayName }}
+      namespace: {{ .Values.gatewayNamespace }}
+      # https only, like the parent's own route.
+      sectionName: https
+  hostnames:
+    - {{ .Values.hostname }}
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ .Values.authentikServiceName }}
+          namespace: {{ .Values.authentikServiceNamespace }}
+          port: {{ .Values.authentikServicePort }}
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /outpost.goauthentik.io

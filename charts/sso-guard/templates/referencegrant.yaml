@@ -1,15 +1,19 @@
-# Lets the SecurityPolicy above reference Dex's Service across namespaces.
+# Lets this namespace's SecurityPolicy (extAuth backend) and the outpost
+# HTTPRoute reference authentik's Service across namespaces.
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
-  name: {{ .Release.Name }}-sso-to-dex
-  namespace: {{ .Values.dexServiceNamespace }}
+  name: {{ .Release.Name }}-sso-to-authentik
+  namespace: {{ .Values.authentikServiceNamespace }}
 spec:
   from:
     - group: gateway.envoyproxy.io
       kind: SecurityPolicy
       namespace: {{ .Release.Namespace }}
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{ .Release.Namespace }}
   to:
     - group: ""
       kind: Service
-      name: {{ .Values.dexServiceName }}
+      name: {{ .Values.authentikServiceName }}
