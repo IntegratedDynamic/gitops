@@ -137,35 +137,40 @@ grafana:
         - scalepack.fr/sync-wave
       labelSelector: {}
 
-  # Native OIDC against our shared Dex (bootstrap/values.yaml,
-  # staticClients.grafana), exposed at grafana.staging.scalepack.fr by
-  # services/platform/monitoring/grafana-gateway — mirrors how ArgoCD/OpenBao talk to Dex
-  # natively instead of going through Envoy Gateway's SecurityPolicy.
+  # Native OIDC against authentik (infra repo's 14-sso/managed/oidc.tf, client
+  # `grafana`; was Dex), exposed at grafana.staging.scalepack.fr by
+  # services/platform/monitoring/grafana-gateway -- mirrors how ArgoCD/OpenBao talk
+  # to the IdP natively instead of going through Envoy Gateway's SecurityPolicy.
   # client_secret comes in via envValueFrom below rather than here,
-  # since grafana.ini is rendered into a plain (non-secret) ConfigMap.
+  # since grafana.ini is rendered into a plain (non-secret) ConfigMap. It is the
+  # SAME secret the Dex client used (kv/apps/dex/credentials), authentik's
+  # provider was created with it.
   grafana.ini:
     server:
       root_url: https://grafana.staging.scalepack.fr
     auth:
-      # Hides the username/password form from the UI — doesn't
+      # Hides the username/password form from the UI -- doesn't
       # touch the API (auth.basic stays enabled, see admin: above).
       disable_login_form: true
     auth.generic_oauth:
       enabled: true
-      name: GitHub (Dex)
+      name: authentik
       client_id: grafana
-      scopes: "openid profile email groups"
-      auth_url: https://auth.staging.scalepack.fr/auth
-      token_url: https://auth.staging.scalepack.fr/token
-      api_url: https://auth.staging.scalepack.fr/userinfo
-      # Maps the same IntegratedDynamic:Admin GitHub team ArgoCD's
-      # rbac.policy.csv grants role:admin to — everyone else (no
-      # team, or a different team) falls back to Viewer. NOTE:
-      # several Grafana 11.1/11.2+ GitHub issues report
-      # role_attribute_path sometimes not picking up groups from
-      # the userinfo endpoint — validate this live before relying
-      # on it for anything sensitive (see OIDC.md).
-      role_attribute_path: "contains(groups[*], 'IntegratedDynamic:Admin') && 'Admin' || 'Viewer'"
+      # `profile` carries the `groups` claim in authentik (there is no separate
+      # `groups` scope; an unknown scope is silently dropped).
+      scopes: "openid profile email"
+      # authorize/token/userinfo are shared by every authentik provider, the
+      # per-client part is only the issuer (.../application/o/grafana/).
+      auth_url: https://sso.staging.scalepack.fr/application/o/authorize/
+      token_url: https://sso.staging.scalepack.fr/application/o/token/
+      api_url: https://sso.staging.scalepack.fr/application/o/userinfo/
+      # platform-admins (the authentik group the GitHub `admin` team maps to,
+      # same group ArgoCD's rbac.policy.csv grants role:admin to) -- everyone
+      # else falls back to Viewer. NOTE: several Grafana 11.1/11.2+ GitHub
+      # issues report role_attribute_path sometimes not picking up groups from
+      # the userinfo endpoint -- validate this live before relying on it for
+      # anything sensitive (see OIDC.md).
+      role_attribute_path: "contains(groups[*], 'platform-admins') && 'Admin' || 'Viewer'"
       allow_assign_grafana_admin: true
 
   envValueFrom:

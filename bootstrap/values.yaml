@@ -28,8 +28,9 @@ repoURL: https://github.com/IntegratedDynamic/gitops.git
 # every app that used to live here was extracted into the infrastructure
 # repo's own 10-cluster/scaleway/platform-apps/ chart -- ten
 # Terraform-created top-level Applications (secrets-apps, eso-data-apps,
-# monitoring-apps, backups-apps, networking-apps, wireguard-apps, dex-apps,
-# argocd-config-apps, grafana-apps, argo-workflows-apps,
+# monitoring-apps, backups-apps, networking-apps, wireguard-apps,
+# grafana-apps, argo-workflows-apps (dex-apps and argocd-config-apps were
+# removed with Dex, infra issue #135),
 # crossplane-apps -- the last renamed from terraform-apply-apps, infra#101),
 # wired into a real dependency DAG via Terraform
 # depends_on + health-wait gates (see that chart's README.md). `demo` is

@@ -1,8 +1,0 @@
-apiVersion: v2
-name: argocd-config
-description: >-
-  Bounces argocd-server once argocd-config-secret's OIDC secret lands
-  (ExternalSecret split out to services/platform/argocd-config/secret,
-  infra#84 follow-up; HTTPRoute lives in services/platform/argocd-config/gateway)
-type: application
-version: 0.1.0

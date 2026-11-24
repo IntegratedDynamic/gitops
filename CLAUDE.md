@@ -12,7 +12,7 @@ The companion infrastructure repo (Terraform + Minikube) bootstraps ArgoCD and s
 
 **`bootstrap/`** — A Helm chart that is the entry point referenced by external repos (e.g. the Terraform infra repo). The provisioner points an ArgoCD Application at this path and passes `env` (which cluster) and `revision` (which git ref). The chart's `templates/<env>.yaml` creates, directly, the two objects that discover every Application for that cluster (see below) — there is no intermediate `clusters/<env>/` chart.
 
-**`services/<bucket>/<name>/`** — One directory per service, `<bucket>` being `platform` (infra: openbao, cert-manager, gateway, dex, external-dns, monitoring, velero, argocd-config, secrets-sync, ingress-nginx, external-secrets) or `products` (revenue-generating apps: demo). Everything about a service lives together:
+**`services/<bucket>/<name>/`** — One directory per service, `<bucket>` being `platform` (infra: openbao, cert-manager, gateway, authentik, external-dns, monitoring, velero, argocd-config, secrets-sync, ingress-nginx, external-secrets) or `products` (revenue-generating apps: demo). Everything about a service lives together:
 
 - In-house Helm charts as subfolders (`init/`, `config/`, `chart/`, etc. — the name describes what the chart does). `values.yaml` is the baseline; `values-<env>.yaml` holds per-environment overrides. Charts are never duplicated across environments.
 - `applications/<env>/` — that service's ArgoCD Applications for a given cluster, in one of two formats (see below).
