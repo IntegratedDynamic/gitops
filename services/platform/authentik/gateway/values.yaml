@@ -1,0 +1,19 @@
+# Exposes authentik at sso.staging.scalepack.fr via HTTPRoute.
+namespace: authentik
+
+# Service created by the authentik chart (release name "authentik", port 80).
+authentik:
+  serviceName: authentik-server
+  servicePort: 80
+
+domain: staging.scalepack.fr
+
+# Overridden per-cluster by the infra repo's argocd.tf (var.env_suffix, this
+# app's hostSuffix valueParam in values-networking-resources.yaml). Empty on
+# main's workspace.
+hostSuffix: ""
+
+gateway:
+  hostPrefix: sso
+  gatewayName: scaleway-gateway
+  gatewayNamespace: gateway

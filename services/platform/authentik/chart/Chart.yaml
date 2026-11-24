@@ -1,0 +1,16 @@
+apiVersion: v2
+name: authentik
+description: >-
+  Thin wrapper around the upstream authentik chart (identity provider, the
+  platform's single OIDC issuer and forward-auth decision point) plus the
+  PostgreSQL it requires. Configuration -- groups, roles, policies,
+  applications, tiles -- is NOT here: it is Terraform, in the infrastructure
+  repo's 14-sso/managed, applied by the authentik-managed Crossplane
+  Workspace (services/platform/crossplane/config).
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: authentik
+    version: 2026.8.6
+    repository: https://charts.goauthentik.io

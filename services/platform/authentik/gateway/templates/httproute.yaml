@@ -1,0 +1,29 @@
+# Exposes authentik (login flows, admin UI, the "My applications" tile page
+# and the OIDC issuer) at sso.<domain> on the shared gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: authentik
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    # Written explicitly to match the Gateway API's own schema defaults,
+    # avoiding permanent OutOfSync in ArgoCD (see crossview/gateway).
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.gatewayName }}
+      namespace: {{ .Values.gateway.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    - {{ printf "%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ .Values.authentik.serviceName }}
+          port: {{ .Values.authentik.servicePort }}
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /

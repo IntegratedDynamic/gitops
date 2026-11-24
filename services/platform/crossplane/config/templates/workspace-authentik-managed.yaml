@@ -1,0 +1,60 @@
+# 14-sso/managed -- authentik-as-code: groups, forward-auth applications (and
+# so the per-group "My applications" tiles) and the embedded outpost. Same
+# shape as workspace-grafana-managed.yaml. Authenticates to authentik with the
+# akadmin bootstrap token (TF_VAR_authentik_token, from the ESO-synced
+# crossplane-authentik-token Secret) over the in-cluster Service, so it needs
+# neither DNS nor the Gateway; until authentik answers, provider-opentofu just
+# retries on its own backoff.
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: authentik-managed
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # See providerconfig.yaml -- Workspace CRD ships in wave 0's Provider package.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    crossplane.io/external-name: {{ .Values.workspaces.authentikManaged.externalName }}
+spec:
+  deletionPolicy: Orphan
+  managementPolicies: ["Observe", "Create", "Update"]
+  forProvider:
+    enableTofuCLILogging: true
+    source: Remote
+    module: git::{{ .Values.infraRepo }}?ref={{ .Values.gitRef }}
+    entrypoint: {{ .Values.workspaces.authentikManaged.entrypoint }}
+    remotePullPolicy: Always
+    planArgs:
+      - -var-file=env/{{ .Values.workspaces.authentikManaged.externalName }}.tfvars
+    applyArgs:
+      - -var-file=env/{{ .Values.workspaces.authentikManaged.externalName }}.tfvars
+    env:
+      {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
+      - name: TF_VAR_authentik_url
+        value: {{ .Values.workspaces.authentikManaged.authentikUrl | quote }}
+      - name: TF_VAR_host_suffix
+        value: {{ .Values.hostSuffix | quote }}
+      - name: TF_VAR_authentik_token
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.authentikToken.secretName }}
+          key: token
+      # GitHub OAuth App credentials (external secrets, see
+      # externalsecret-authentik-github.yaml) for 14-sso/managed/github.tf.
+      # OIDC client secrets (one JSON map), see externalsecret-authentik-oidc.yaml.
+      - name: TF_VAR_oidc_client_secrets
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.authentikOidc.secretName }}
+          key: client-secrets
+      - name: TF_VAR_github_client_id
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.authentikGithub.secretName }}
+          key: client-id
+      - name: TF_VAR_github_client_secret
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.authentikGithub.secretName }}
+          key: client-secret
+  providerConfigRef:
+    name: default
