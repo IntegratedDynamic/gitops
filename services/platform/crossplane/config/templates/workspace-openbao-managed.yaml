@@ -47,14 +47,9 @@ spec:
         value: {{ .Values.workspaces.openbaoManaged.vaultAddress | quote }}
       - name: TF_VAR_vault_auth_method
         value: {{ .Values.workspaces.openbaoManaged.vaultAuthMethod | quote }}
-      # The three required, no-default vars — admin-supplied, JSON-encoded
+      # The required, no-default vars — admin-supplied, JSON-encoded
       # on the infra side, from OpenBao KV via ESO (see
       # externalsecret-openbao-managed-tfvars.yaml).
-      - name: TF_VAR_dex_github_connector
-        secretKeyRef:
-          namespace: {{ .Values.namespace }}
-          name: {{ .Values.openbaoManagedTfvars.secretName }}
-          key: TF_VAR_dex_github_connector
       - name: TF_VAR_secrets_sync_github_eso_private_key
         secretKeyRef:
           namespace: {{ .Values.namespace }}

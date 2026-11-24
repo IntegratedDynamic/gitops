@@ -20,6 +20,7 @@ github:
 workspaces:
   - openbao-managed
   - grafana-managed
+  - authentik-managed
 
 # Runs `kubectl annotate` in the Job the Sensor creates per push (matches the
 # cluster's Kubernetes minor).

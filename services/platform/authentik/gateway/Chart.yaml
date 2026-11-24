@@ -1,0 +1,9 @@
+apiVersion: v2
+name: authentik-gateway
+description: >-
+  HTTPRoute-only chart exposing authentik (sso.<domain>) on the shared
+  gateway -- same split-out pattern as services/platform/crossview/gateway.
+  The per-app /outpost.goauthentik.io routes live in charts/sso-guard, next
+  to the protected app's own HTTPRoute, not here.
+type: application
+version: 0.1.0
