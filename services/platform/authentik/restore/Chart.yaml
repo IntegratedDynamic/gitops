@@ -1,0 +1,14 @@
+apiVersion: v2
+name: authentik-restore
+description: >-
+  Restores authentik's Postgres volume (users, group membership, passkeys, GitHub
+  links) from the latest Velero CSI snapshot on a fresh cluster, BEFORE authentik
+  itself is created. A thin wrapper: the logic is charts/velero-pvc-restore.
+type: application
+version: 0.2.0
+
+dependencies:
+  - name: velero-pvc-restore
+    alias: restore
+    version: 0.1.0
+    repository: "file://../../../../charts/velero-pvc-restore"

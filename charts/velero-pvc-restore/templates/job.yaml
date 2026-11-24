@@ -1,0 +1,67 @@
+# Runs as an early sync wave of the workload's own app-of-apps, so the volumes are
+# back before the workload would create empty ones. Deliberately NOT in a gate
+# domain others wait on: a problem restoring one workload's data must hold back only
+# that workload.
+{{- if .Values.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # A Job's spec is immutable: changing this chart (an env var, the script, the image)
+  # would fail ArgoCD's sync. So the name carries a hash of everything that makes up
+  # the Job: a change creates a NEW Job and the old one is pruned. Safe because the
+  # script is idempotent (a re-run on a cluster whose PVCs exist is a no-op).
+  name: {{ .Release.Name }}-{{ printf "%s%s" (toJson .Values) (include (print $.Template.BasePath "/configmap.yaml") .) | sha256sum | trunc 8 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Release.Name }}
+        component: restore
+    spec:
+      serviceAccountName: {{ .Release.Name }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "/scripts/restore.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: SOURCE_NAMESPACE
+              value: {{ .Values.sourceNamespace | quote }}
+            - name: PVC_NAMES
+              value: {{ join " " .Values.pvcs | quote }}
+            - name: SCHEDULE_NAME
+              value: {{ .Values.scheduleName | quote }}
+            - name: SELECTOR_KEY
+              value: {{ .Values.selectorLabel.key | default "" | quote }}
+            - name: SELECTOR_VALUE
+              value: {{ .Values.selectorLabel.value | default "" | quote }}
+            - name: VELERO_NS
+              value: {{ .Values.veleroNamespace | quote }}
+            - name: BSL
+              value: {{ .Values.storageLocation | quote }}
+            - name: RESTORE_NAME
+              value: {{ .Release.Name | quote }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Release.Name }}
+{{- end }}

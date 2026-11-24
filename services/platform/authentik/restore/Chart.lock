@@ -1,0 +1,6 @@
+dependencies:
+- name: velero-pvc-restore
+  repository: file://../../../../charts/velero-pvc-restore
+  version: 0.1.0
+digest: sha256:457a8a61cb95ce51af0e7df243eca1b34edc2115aad62527525825eec470c999
+generated: "2026-11-24T23:32:36.466594+01:00"

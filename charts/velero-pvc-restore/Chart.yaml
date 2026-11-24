@@ -1,0 +1,10 @@
+apiVersion: v2
+name: velero-pvc-restore
+description: >-
+  Restores one or more PersistentVolumeClaims from the latest Velero CSI snapshot on
+  a fresh cluster, BEFORE the workload that owns them is created. A no-op when the
+  volumes already exist, and it fails closed rather than letting the workload start
+  on an empty volume when a backup should exist. Generic: used by authentik
+  (services/platform/authentik/restore) and Firefly III (nbrieussel/homelab-apps).
+type: application
+version: 0.1.0
