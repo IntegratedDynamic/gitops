@@ -59,7 +59,7 @@ gitops/
 │   └── templates/local.yaml     # creates services-vendor-local + services-app-local
 │
 ├── services/
-│   ├── platform/                # infra: openbao, cert-manager, gateway, dex, monitoring, ...
+│   ├── platform/                # infra: openbao, cert-manager, gateway, authentik, monitoring, ...
 │   │   └── openbao/
 │   │       ├── init/            # in-house chart, restore-at-boot Job only — no ESO
 │   │       │                    #   coupling; the ClusterSecretStore it feeds lives in

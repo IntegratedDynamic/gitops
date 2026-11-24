@@ -6,14 +6,15 @@
 # (wave 7) needs to mount it.
 namespace: monitoring
 
-# Grafana's own OIDC client, registered in bootstrap/values.yaml
-# (staticClients.grafana). The secret this ExternalSecret creates is
-# referenced by bootstrap/values.yaml's grafana.envValueFrom as
-# GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET.
+# Grafana's own OIDC client in authentik (infra repo's 14-sso/managed/oidc.tf,
+# client `grafana`). The secret this ExternalSecret creates is referenced by the
+# grafana chart's envValueFrom as GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET. The
+# object is Terraform-owned (11-secrets/openbao/managed,
+# vault_kv_secret_v2.authentik_oidc_clients), shared with authentik itself.
 oidcSecret:
   name: grafana-oidc-client-secret
   clusterSecretStoreName: openbao
-  openbaoPath: apps/dex/credentials
+  openbaoPath: apps/authentik/oidc-clients
 
 # Bootstrap admin identity — see templates/externalsecret-admin.yaml for
 # why this exists despite no human being meant to use it.
