@@ -1,0 +1,31 @@
+# Escape hatch: false skips the restore entirely (the workload then starts on empty
+# volumes). Only for a deliberate fresh start -- see README.md.
+enabled: true
+
+# REQUIRED. The Velero schedule that backs the volumes up (the velero chart prefixes
+# the schedule name from its values with `velero-`).
+scheduleName: ""
+
+# REQUIRED. The PVCs to bring back, in the namespace this chart is installed in.
+# The newest backup that holds a snapshot for EVERY one of them is used.
+pvcs: []
+
+# Optional: restrict the restore to resources carrying this label (the same selector
+# the schedule uses). Leave empty to restore every PVC of the backup.
+selectorLabel: {}
+#  key: app.kubernetes.io/name
+#  value: authentik-postgres
+
+# Normally empty: restore into the namespace this chart is installed in, from a
+# backup taken there. Set it to restore a backup taken in ANOTHER namespace into
+# this one (a restore drill, see README.md).
+sourceNamespace: ""
+
+veleroNamespace: velero
+# Velero's BackupStorageLocation (the one the schedule writes to).
+storageLocation: default
+
+image:
+  repository: alpine/kubectl
+  tag: "1.35.3"
+  pullPolicy: IfNotPresent

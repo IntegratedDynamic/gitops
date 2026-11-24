@@ -169,6 +169,58 @@ velero:
           matchLabels:
             app.kubernetes.io/name: grafana
 
+    # CSI VolumeSnapshot backup of authentik's Postgres PVC: users, group
+    # membership, passkeys and GitHub links live ONLY there (the groups, apps,
+    # providers and flows are Terraform, 14-sso/managed, and come back by
+    # themselves). Without this a cluster `down` deletes the volume (the
+    # StorageClass reclaims with Delete) and every passkey with it. Restored on a
+    # fresh cluster by services/platform/authentik/restore, inside sso-apps.
+    # labelSelector keeps it to the one PVC (the secrets are not backed up here:
+    # authentik's SECRET_KEY and DB password are in OpenBao, whose own hourly raft
+    # snapshot carries them -- the restored database needs those exact values).
+    # Offset 30 minutes from the two schedules above.
+    #
+    # Every 4 hours and kept 60 days, not hourly and kept 14 like the others: the
+    # number of versions kept is TTL / period (360 here, 336 for 14 days hourly), and
+    # what we want is for the LATEST snapshot to survive a cluster that stays down
+    # longer than the history we keep. Velero has no "keep at least the last one": a
+    # backup past its TTL is deleted as soon as a Velero comes up, possibly before
+    # authentik-restore reads it, so the TTL itself has to be long. Native Velero
+    # only, no job managing the lifecycle. The cost is a snapshot up to 4 hours old
+    # (a passkey added in the last 4 hours before a `down` is lost).
+    # 60 days and not more: the Velero bucket moves objects to GLACIER after 90 days
+    # (03-storage/scaleway, lifecycle rule `velero-retention`), where a backup cannot
+    # be restored directly; per-bucket `cold_storage_enabled = false` lifts that cap.
+    # Only backups taken from now on get this TTL, existing ones keep their 14 days.
+    authentik-data:
+      schedule: "30 */4 * * *"
+      template:
+        ttl: "1440h" # 60 days
+        storageLocation: default
+        includedNamespaces:
+          - authentik
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: authentik-postgres
+
+    # CSI VolumeSnapshots of Firefly III's two volumes (the PostgreSQL data and the
+    # app's uploads), real instance only: `includedNamespaces` keeps it off the
+    # `firefly-pr-<N>` preview namespaces, `includedResources` off the Secrets and
+    # everything else in the namespace (APP_KEY and the DB password are in OpenBao,
+    # whose hourly raft snapshot carries them: the restored database needs them).
+    # Restored on a fresh cluster before Firefly starts, by the homelab-apps bootstrap
+    # (charts/velero-pvc-restore). Same period and TTL as authentik-data, for the same
+    # reasons (see above); 15 minutes after it so they do not contend.
+    firefly-data:
+      schedule: "45 */4 * * *"
+      template:
+        ttl: "1440h" # 60 days
+        storageLocation: default
+        includedNamespaces:
+          - firefly-iii
+        includedResources:
+          - persistentvolumeclaims
+
   # Chart ships resources: {} by default (its own commented-out example
   # suggests 500m/128Mi request, 1000m/512Mi limit — scaled down here
   # since this instance's backup scope is a handful of Secrets, not

@@ -1,0 +1,143 @@
+{{- if .Values.enabled }}
+{{- $_ := required "velero-pvc-restore: scheduleName is required" .Values.scheduleName }}
+{{- $_ := required "velero-pvc-restore: pvcs is required (a non-empty list of PVC names)" .Values.pvcs }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+data:
+  restore.sh: |
+    #!/usr/bin/env sh
+    # Brings PVCs back from the latest Velero CSI snapshot on a fresh cluster, BEFORE
+    # the workload that owns them creates empty ones.
+    #
+    # Mirrors services/platform/monitoring/grafana-restore, with deliberate
+    # differences -- these volumes hold data nothing else can recreate (accounts,
+    # passkeys, finances), so "start empty by mistake" is the failure to avoid, not
+    # "wait a bit":
+    #  1. NEVER touches a PVC that already exists (a running cluster is a no-op).
+    #  2. Waits for Velero's first sync of the bucket to FINISH (BackupStorageLocation
+    #     Available + lastSyncedTime), instead of a fixed ~25 min budget: only then
+    #     can "no backup" be told from "not synced yet".
+    #  3. Restores an explicit backup, the newest one that holds a snapshot for EVERY
+    #     PVC, not `scheduleName` ("latest successful"): on a fresh cluster the
+    #     schedule's first backup can be of an EMPTY namespace and would be the latest.
+    #  4. Checks each restored PVC really points at a VolumeSnapshot, and FAILS if
+    #     not (Velero can report Completed with a dangling PVC).
+    # A failure here holds back only the workload this runs in front of (it is a
+    # sync wave of that workload's own app-of-apps); `enabled: false` is the escape
+    # hatch for a deliberate fresh start.
+    set -eu
+
+    # 1. Never overwrite live data: only the missing PVCs are restored.
+    MISSING=""
+    for pvc in ${PVC_NAMES}; do
+      if kubectl get pvc "${pvc}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+        echo "PVC ${NAMESPACE}/${pvc} already exists: it is never overwritten."
+      else
+        MISSING="${MISSING} ${pvc}"
+      fi
+    done
+    if [ -z "${MISSING}" ]; then
+      echo "Every PVC already exists: nothing to restore."
+      exit 0
+    fi
+    set -- ${PVC_NAMES}
+    EXPECTED=$#
+
+    # Idempotence: only CREATE the Restore once (this Job can be re-created while
+    # a restore is running); a re-run just goes on waiting for it.
+    if kubectl get restore "${RESTORE_NAME}" -n "${VELERO_NS}" >/dev/null 2>&1; then
+      echo "Restore ${RESTORE_NAME} already exists -- not creating it again, waiting for it."
+    else
+      # 2. Velero's first sync of the bucket (backupSyncPeriod is 10s here).
+      i=0
+      while true; do
+        phase=$(kubectl get backupstoragelocation "${BSL}" -n "${VELERO_NS}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+        synced=$(kubectl get backupstoragelocation "${BSL}" -n "${VELERO_NS}" -o jsonpath='{.status.lastSyncedTime}' 2>/dev/null || true)
+        if [ "${phase}" = "Available" ] && [ -n "${synced}" ]; then
+          break
+        fi
+        i=$((i + 1))
+        if [ "${i}" -gt 90 ]; then
+          echo "ERROR: Velero's backup storage location '${BSL}' is not Available and synced after ~15 min (phase='${phase}')."
+          echo "Not starting on empty volumes by guessing there is no backup: fix Velero, or set enabled: false for a deliberate fresh start."
+          exit 1
+        fi
+        echo "waiting for Velero to finish its first sync of the bucket (phase='${phase}')..."
+        sleep 10
+      done
+
+      # 3. Newest Completed backup of the schedule that holds a snapshot per PVC.
+      BACKUP=$(kubectl get backups.velero.io -n "${VELERO_NS}" -l "velero.io/schedule-name=${SCHEDULE_NAME}" \
+        -o jsonpath='{range .items[?(@.status.phase=="Completed")]}{.metadata.creationTimestamp}{" "}{.metadata.name}{" "}{.status.csiVolumeSnapshotsCompleted}{"\n"}{end}' \
+        | awk -v n="${EXPECTED}" '$3 + 0 >= n { print $1, $2 }' | sort | tail -1 | cut -d' ' -f2)
+      if [ -z "${BACKUP}" ]; then
+        echo "No backup of schedule ${SCHEDULE_NAME} holds a snapshot for all ${EXPECTED} PVC(s) (the bucket was synced): first start, nothing to restore. The workload starts on empty volumes."
+        exit 0
+      fi
+      echo "Restoring${MISSING} from backup ${BACKUP}"
+
+      SRC="${SOURCE_NAMESPACE:-${NAMESPACE}}"
+      MAPPING=""
+      if [ "${SRC}" != "${NAMESPACE}" ]; then
+        MAPPING=", \"namespaceMapping\": {\"${SRC}\": \"${NAMESPACE}\"}"
+      fi
+      SELECTOR=""
+      if [ -n "${SELECTOR_KEY:-}" ]; then
+        SELECTOR="\"labelSelector\": {\"matchLabels\": {\"${SELECTOR_KEY}\": \"${SELECTOR_VALUE:-}\"}},"
+      fi
+
+      # includedResources needs volumesnapshots/volumesnapshotcontents next to the
+      # PVC: Velero patches the restored PVC's dataSourceRef to the backup's
+      # VolumeSnapshot but only RECREATES that object if its kind is allowed here
+      # (otherwise a dangling dataSourceRef, which `velero restore describe` still
+      # reports as Completed -- learned on grafana-restore, infra#75). PVCs that
+      # already exist are skipped by Velero, never overwritten.
+      kubectl create -f - <<EOF
+    {
+      "apiVersion": "velero.io/v1",
+      "kind": "Restore",
+      "metadata": {"name": "${RESTORE_NAME}", "namespace": "${VELERO_NS}"},
+      "spec": {
+        "backupName": "${BACKUP}",
+        "includedNamespaces": ["${SRC}"],
+        ${SELECTOR}
+        "includedResources": ["persistentvolumeclaims", "volumesnapshots", "volumesnapshotcontents"]${MAPPING}
+      }
+    }
+    EOF
+    fi
+
+    i=0
+    while true; do
+      phase=$(kubectl get restore "${RESTORE_NAME}" -n "${VELERO_NS}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+      case "${phase}" in
+        Completed|PartiallyFailed) echo "Restore: ${phase}"; break ;;
+        Failed|FailedValidation)
+          echo "ERROR: Restore ${RESTORE_NAME}: ${phase}"
+          kubectl get restore "${RESTORE_NAME}" -n "${VELERO_NS}" -o jsonpath='{.status.failureReason}{"\n"}{.status.validationErrors}{"\n"}' || true
+          exit 1 ;;
+      esac
+      i=$((i + 1))
+      if [ "${i}" -gt 120 ]; then echo "ERROR: timeout waiting for Restore ${RESTORE_NAME} to finish"; exit 1; fi
+      sleep 5
+    done
+
+    # 4. Every restored PVC must really come from a snapshot.
+    for pvc in ${MISSING}; do
+      if ! kubectl get pvc "${pvc}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+        echo "ERROR: Restore finished but PVC ${NAMESPACE}/${pvc} does not exist."
+        kubectl get restore "${RESTORE_NAME}" -n "${VELERO_NS}" -o jsonpath='errors={.status.errors} warnings={.status.warnings}{"\n"}' || true
+        exit 1
+      fi
+      source_kind=$(kubectl get pvc "${pvc}" -n "${NAMESPACE}" -o jsonpath='{.spec.dataSourceRef.kind}')
+      if [ "${source_kind}" != "VolumeSnapshot" ]; then
+        echo "ERROR: PVC ${NAMESPACE}/${pvc} was restored WITHOUT a snapshot source (dataSourceRef.kind='${source_kind}'): the workload would start on an empty volume."
+        exit 1
+      fi
+      echo "PVC ${NAMESPACE}/${pvc} restored from a VolumeSnapshot."
+    done
+    echo "Done: the workload will start on the restored volume(s)."
+{{- end }}

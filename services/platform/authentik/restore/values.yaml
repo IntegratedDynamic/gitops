@@ -1,0 +1,19 @@
+# Everything under `restore:` is the generic chart's values
+# (charts/velero-pvc-restore/values.yaml, which documents each one).
+restore:
+  # Escape hatch: false skips the restore entirely (authentik then starts on an
+  # empty database). Only for a deliberate fresh start.
+  enabled: true
+
+  # The Velero schedule that backs the volume up: the `authentik-data` entry of
+  # services/platform/velero/chart/values-scaleway.yaml (the velero chart prefixes
+  # the schedule name with `velero-`).
+  scheduleName: velero-authentik-data
+
+  pvcs:
+    - data-authentik-postgres-0
+
+  # The same selector as the schedule's.
+  selectorLabel:
+    key: app.kubernetes.io/name
+    value: authentik-postgres
