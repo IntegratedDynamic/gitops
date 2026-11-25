@@ -6,6 +6,23 @@ apiVersion: opentofu.upbound.io/v1beta1
 kind: Workspace
 metadata:
   name: openbao-managed
+  # Crossplane's own finalizer, DECLARED here on purpose (same on the other two
+  # Workspaces). Without it a cold start can leave the Workspace without a
+  # Ready condition for the whole poll interval (provider-opentofu --poll=6h):
+  # on its first reconcile Observe runs `tofu plan`; when the plan is empty --
+  # the tofu state already exists in S3 and OpenBao was restored to match it,
+  # which is the normal cold start -- the provider sets Ready in memory, then
+  # the reconciler adds its finalizer with a client Update, whose response
+  # overwrites that in-memory status. The Workspace is written Synced=True
+  # with no Ready and requeued after the poll interval. Nothing else reconciles
+  # it on a cold start, so crossplane-config (and crossplane-apps, and the CI
+  # apply waiting on it) stayed Progressing for hours; every cold apply since
+  # --poll went to 6h ended `cancelled` at the 45 min timeout. With the
+  # finalizer already present AddFinalizer is a no-op, nothing is overwritten,
+  # and the first pass ends Ready. Found in crossplane-runtime v2.0.0's
+  # reconciler (managed/reconciler.go) as used by provider-opentofu v1.1.7.
+  finalizers:
+    - finalizer.managedresource.crossplane.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
     # The Workspace CRD ships in the provider-opentofu package (wave 0's

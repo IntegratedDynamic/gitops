@@ -15,6 +15,10 @@ apiVersion: opentofu.upbound.io/v1beta1
 kind: Workspace
 metadata:
   name: grafana-managed
+  # Declared on purpose, see workspace-openbao-managed.yaml (without it a cold
+  # start whose first plan is empty never gets Ready before the poll interval).
+  finalizers:
+    - finalizer.managedresource.crossplane.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
     # See providerconfig.yaml -- Workspace CRD ships in wave 0's Provider package.
