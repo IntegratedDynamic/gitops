@@ -69,6 +69,18 @@ alloy:
       cpu: 250m
       memory: 128Mi
 
+  controller:
+    # A node agent must be able to run on EVERY node, so it gets a priority
+    # above the workloads (all priority 0 here) and may preempt one of them.
+    # Without it, on a cold start the first node is filled to 99% of its memory
+    # REQUESTS before the autoscaler brings the second one, the DaemonSet pod
+    # pinned to that node stays Pending ("Insufficient memory", 37Mi free for a
+    # ~50Mi request) while the other node is nearly empty -- a DaemonSet pod
+    # cannot move -- and alloy, then monitoring-apps, stayed Progressing for as
+    # long as the cluster lived (seen on two fresh clusters, 2026-11-25). The
+    # preempted workload pod just reschedules on the other node.
+    priorityClassName: system-node-critical
+
   # Scraped by the cluster's Prometheus (see monitoring/chart's
   # *SelectorNilUsesHelmValues: false).
   serviceMonitor:
