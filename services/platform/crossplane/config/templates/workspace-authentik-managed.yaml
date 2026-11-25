@@ -5,12 +5,29 @@
 # crossplane-authentik-token Secret) over the in-cluster Service, so it needs
 # neither DNS nor the Gateway; until authentik answers, provider-opentofu just
 # retries on its own backoff.
+#
+# SYNC ORDER (this Application, on a cluster where none of these Secrets exists
+# yet -- every cold start):
+#   wave 0  state/tfvars/grafana-admin ExternalSecrets
+#   wave 1  ProviderConfig, openbao-managed, grafana-managed Workspaces. The
+#           openbao-managed one applies the `eso-generate` policy and the
+#           Terraform-owned OpenBao objects (apps/authentik/oidc-clients,
+#           apps/authentik/credentials) that the wave-2 Secrets read.
+#   wave 2  the three authentik ExternalSecrets (token, oidc, github)
+#   wave 3  THIS Workspace
+# A Workspace MUST sit in a LATER wave than every Secret its env reads
+# (secretKeyRef). ArgoCD does not start wave N+1 while a wave-N resource is
+# unhealthy, and a Workspace whose Secret is missing is Synced=False, which
+# ArgoCD reports as a failed sync task. At wave 1, next to the ExternalSecrets'
+# wave 2, it deadlocked every cold start: the Workspace waited for a Secret that
+# only the next wave creates, and the next wave waited for the Workspace (the
+# sync gave up after its 5 default retries and never created the Secret).
 apiVersion: opentofu.upbound.io/v1beta1
 kind: Workspace
 metadata:
   name: authentik-managed
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "3"
     # See providerconfig.yaml -- Workspace CRD ships in wave 0's Provider package.
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     crossplane.io/external-name: {{ .Values.workspaces.authentikManaged.externalName }}
