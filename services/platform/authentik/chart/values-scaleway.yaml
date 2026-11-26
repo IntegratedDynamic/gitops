@@ -19,6 +19,13 @@ postgres:
     requests: {cpu: 50m, memory: 128Mi}
     limits: {memory: 384Mi}
 
+# The read-only role Grafana uses for the "who has access to what" dashboard
+# (templates/reporting-role.yaml). Password: services/platform/authentik/secret.
+reporting:
+  enabled: true
+  role: grafana_reader
+  credentialsSecretName: authentik-reporting-credentials
+
 # Everything below nests under `authentik:` -- the upstream chart is this
 # wrapper's dependency, helm only exposes a subchart the values under its
 # own name.
