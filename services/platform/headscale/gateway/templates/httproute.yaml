@@ -18,6 +18,20 @@ spec:
   hostnames:
     - {{ printf "%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}
   rules:
+    {{- if .Values.sts.enabled }}
+    # headscale-sts (../chart's second container): CI jobs trade their GitHub
+    # OIDC token for a preauth key. The longer prefix wins over "/" below.
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ .Values.headscale.serviceName }}
+          port: {{ .Values.sts.servicePort }}
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /sts
+    {{- end }}
     - backendRefs:
         - group: ""
           kind: Service

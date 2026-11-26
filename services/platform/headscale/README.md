@@ -52,6 +52,47 @@ Check a policy change before merging it:
 headscale policy check --file services/platform/headscale/chart/files/policy.hujson
 ```
 
+## CI nodes
+
+A GitHub Actions job gets its own preauth key, with no secret stored anywhere:
+[headscale-sts](https://github.com/fredrikekre/headscale-sts), second container of
+the pod, checks the job's GitHub OIDC token and mints a single-use, ephemeral,
+`tag:ci-debug` key valid 5 minutes. Which jobs qualify: `sts.github` in
+[`chart/values.yaml`](chart/values.yaml). In the infrastructure repo,
+`.github/actions/debug-tailscale` is the consumer.
+
+```bash
+# inside a job with `permissions: id-token: write`
+server=https://headscale.staging.scalepack.fr
+token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$server/sts" | jq -r .value)
+key=$(curl -fsS -X POST -H "Authorization: Bearer $token" "$server/sts/authkey")
+tailscale up --login-server="$server" --authkey="$key"
+```
+
+It is a stopgap until headscale supports workload identity federation
+([juanfont/headscale#3303](https://github.com/juanfont/headscale/issues/3303)).
+
+**Trust.** A small third-party project (one author) that holds a headscale admin
+API key, which it creates at each start and keeps in memory. The binary is
+downloaded at start and runs only if its sha256 matches; a failed download
+retries and does not affect headscale itself.
+
+**Upgrading it.** Read the diff between the two tags, then check that the release
+binaries are what that source builds, and update `sts.version` and `sts.sha256`:
+
+```bash
+git clone https://github.com/fredrikekre/headscale-sts && cd headscale-sts
+git checkout <tag>
+# go version: `go version -m <release binary>`
+GOTOOLCHAIN=go1.25.0 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+  -ldflags "-s -w -X main.version=<tag>" -o ../sts-amd64 .
+shasum -a 256 ../sts-amd64   # must equal the release's SHA256SUMS
+```
+
+(v0.2.0's arm64 binary only reproduces with an untracked file in the checkout:
+its release workflow builds amd64 into `dist/` first.)
+
 ## Availability and data
 
 - **Down with the cluster.** While the cluster is down nobody can register, log in

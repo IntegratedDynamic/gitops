@@ -49,3 +49,38 @@ resources:
 
 serviceMonitor:
   enabled: true
+
+# headscale-sts (https://github.com/fredrikekre/headscale-sts): a GitHub Actions
+# job presents its own OIDC token on https://headscale.<domain>/sts/authkey and
+# gets back a single-use, ephemeral, tagged preauth key. No secret stored in
+# GitHub. A stopgap until headscale does workload identity federation itself
+# (juanfont/headscale#3303): remove it then.
+#
+# A third-party service holding a headscale ADMIN API key, hence pinned by
+# checksum. Before bumping, read the diff and check that the release binaries are
+# what the tagged source builds (see ../README.md).
+sts:
+  enabled: true
+  releasesURL: https://github.com/fredrikekre/headscale-sts/releases/download
+  # v0.2.0 = commit 916abd9324cd97a6da4e04f31ab9cc4b8667b47b, go1.25.0.
+  version: v0.2.0
+  sha256:
+    amd64: 64d8b3bdd56917b649c85bd279fccc51aa3e8e04ecda34196a6a6db1533b55b8
+    arm64: f8003af9984e7fd57bff10a1e7540fb275730b31691dc1a5170d41993df84d61
+  # Lifetime of the API key the service creates for itself at each start. A pod
+  # running longer than this stops minting keys until it is restarted.
+  apiKeyExpiration: 90d
+  # Who may get a key: any workflow job of this repository (any branch), the same
+  # scope as the Tailscale federated identity it replaces. Pull requests from
+  # forks get no OIDC token. The ID survives neither a rename-and-recreate nor a
+  # name squat.
+  github:
+    issuer: https://token.actions.githubusercontent.com
+    repository: IntegratedDynamic/infrastructure
+    repositoryID: "1183095005"
+  # Tags of the node registered with a key. Declared in files/policy.hujson.
+  tags: [tag:ci-debug]
+  keyExpiry: 5m
+  resources:
+    requests: {cpu: 5m, memory: 32Mi}
+    limits: {memory: 128Mi}

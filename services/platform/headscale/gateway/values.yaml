@@ -5,6 +5,11 @@ headscale:
   serviceName: headscale
   servicePort: 8080
 
+# Route /sts to headscale-sts (sts.enabled in ../chart/values.yaml).
+sts:
+  enabled: true
+  servicePort: 8470
+
 domain: staging.scalepack.fr
 
 # Overridden per-cluster by the infra repo's argocd.tf (var.env_suffix, this
