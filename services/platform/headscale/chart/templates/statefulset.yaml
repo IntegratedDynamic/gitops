@@ -103,6 +103,52 @@ spec:
               mountPath: /etc/headscale-ca
               readOnly: true
             {{- end }}
+        {{- if .Values.sts.enabled }}
+        # headscale-sts, see values.yaml. In this pod because it creates its API
+        # key over headscale's unix socket. No probe, and no access to the data
+        # volume.
+        - name: sts
+          # The -debug variant: the same headscale CLI, plus a shell and wget.
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}-debug"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/busybox/sh", "/etc/headscale-sts/sts.sh"]
+          terminationMessagePath: /dev/termination-log
+          env:
+            - name: STS_RELEASES_URL
+              value: {{ .Values.sts.releasesURL | quote }}
+            - name: STS_VERSION
+              value: {{ .Values.sts.version | quote }}
+            - name: STS_SHA256_AMD64
+              value: {{ .Values.sts.sha256.amd64 | quote }}
+            - name: STS_SHA256_ARM64
+              value: {{ .Values.sts.sha256.arm64 | quote }}
+            - name: STS_APIKEY_EXPIRATION
+              value: {{ .Values.sts.apiKeyExpiration | quote }}
+          ports:
+            - name: sts
+              containerPort: 8470
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.sts.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/headscale
+              readOnly: true
+            - name: sts-config
+              mountPath: /etc/headscale-sts
+              readOnly: true
+            - name: run
+              mountPath: /var/run/headscale
+            - name: sts-bin
+              mountPath: /opt/sts
+            - name: sts-apikey
+              mountPath: /run/sts
+        {{- end }}
       volumes:
         - name: config
           configMap:
@@ -115,6 +161,20 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.sts.enabled }}
+        - name: sts-config
+          configMap:
+            name: {{ .Release.Name }}-config
+            defaultMode: 420
+            items:
+              - {key: sts.yaml, path: sts.yaml}
+              - {key: sts.sh, path: sts.sh}
+        - name: sts-bin
+          emptyDir: {}
+        - name: sts-apikey
+          emptyDir:
+            medium: Memory
+        {{- end }}
         {{- if .Values.letsEncryptStaging }}
         - name: staging-ca
           configMap:

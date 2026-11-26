@@ -90,6 +90,28 @@ data:
         enabled: true
         method: S256
     {{- end }}
+  {{- if .Values.sts.enabled }}
+  sts.sh: |
+{{ .Files.Get "files/sts.sh" | indent 4 }}
+  sts.yaml: |
+    listen: 0.0.0.0:8470
+    headscale:
+      url: http://127.0.0.1:8080
+      api_key_file: /run/sts/apikey
+    trusts:
+      - issuer: {{ .Values.sts.github.issuer }}
+        # What the job must request; ../gateway routes /sts here.
+        audience: https://{{ $host }}/sts
+        rules:
+          - match:
+              repository: {{ .Values.sts.github.repository | quote }}
+              repository_id: {{ .Values.sts.github.repositoryID | quote }}
+            tags: {{ .Values.sts.tags | toJson }}
+            key:
+              ephemeral: true
+              reusable: false
+              expiry: {{ .Values.sts.keyExpiry }}
+  {{- end }}
   {{- if .Values.letsEncryptStaging }}
   letsencrypt-staging-root-ca.crt: |
 {{ .Files.Get "files/letsencrypt-staging-root-ca.crt" | indent 4 }}
