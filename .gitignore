@@ -19,3 +19,7 @@ secrets/
 
 # Temp
 tmp/
+
+# Python test environments
+.venv-headscale/
+__pycache__/

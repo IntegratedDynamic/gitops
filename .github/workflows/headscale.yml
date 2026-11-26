@@ -1,0 +1,63 @@
+name: headscale
+
+# services/platform/headscale/tests (see its README): `mise run test-headscale`
+# runs the same locally.
+
+on:
+  pull_request:
+    branches: [main]
+    paths: &paths
+      - services/platform/headscale/**
+      - services/platform/gateway/chart/Chart.yaml # the Envoy Gateway version tested against
+      - services/platform/velero/chart/values-scaleway.yaml # headscale's backup schedule
+      - charts/velero-pvc-restore/**
+      - mise.toml
+      - .github/workflows/headscale.yml
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: headscale-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Charts and pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          install_args: helm python go
+      - run: mise run test-headscale
+        env:
+          PYTEST_ADDOPTS: -m "not e2e and not live"
+
+  e2e:
+    name: End to end (kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # tests/test_github_token.py exchanges a token GitHub really issued for a
+      # key on the throwaway cluster. Not granted to pull requests from forks,
+      # where that test skips itself.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          install_args: helm kind kubectl python
+      - run: mise run test-headscale
+        env:
+          PYTEST_ADDOPTS: -m e2e -v --durations=10

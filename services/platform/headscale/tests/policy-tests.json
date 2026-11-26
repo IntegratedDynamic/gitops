@@ -1,0 +1,9 @@
+{
+  "tests": [
+    {"src": "alice@", "accept": ["tag:ci-debug:22"]},
+    {"src": "tag:ci-debug", "deny": ["tag:ci-debug:22", "alice@:22"]}
+  ],
+  "sshTests": [
+    {"src": "alice@", "dst": ["tag:ci-debug"], "accept": ["runner"], "deny": ["root"]}
+  ]
+}

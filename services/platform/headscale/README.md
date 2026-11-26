@@ -46,11 +46,8 @@ hs users list
 hs preauthkeys create --tags tag:ci-debug --ephemeral --expiration 15m
 ```
 
-Check a policy change before merging it:
-
-```bash
-headscale policy check --file services/platform/headscale/chart/files/policy.hujson
-```
+A policy change is checked by the tests (below): state what it must allow and
+refuse in [`tests/policy-tests.json`](tests/policy-tests.json).
 
 ## CI nodes
 
@@ -78,20 +75,14 @@ API key, which it creates at each start and keeps in memory. The binary is
 downloaded at start and runs only if its sha256 matches; a failed download
 retries and does not affect headscale itself.
 
-**Upgrading it.** Read the diff between the two tags, then check that the release
-binaries are what that source builds, and update `sts.version` and `sts.sha256`:
+**Upgrading it.** Read the diff between the two tags, then update `sts.version`,
+`commit`, `goVersion` (`go version -m <release binary>`) and `sha256` (the
+release's `SHA256SUMS`). `tests/test_sts_provenance.py` fails unless those
+binaries are what that source builds.
 
-```bash
-git clone https://github.com/fredrikekre/headscale-sts && cd headscale-sts
-git checkout <tag>
-# go version: `go version -m <release binary>`
-GOTOOLCHAIN=go1.25.0 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
-  -ldflags "-s -w -X main.version=<tag>" -o ../sts-amd64 .
-shasum -a 256 ../sts-amd64   # must equal the release's SHA256SUMS
-```
+## Tests
 
-(v0.2.0's arm64 binary only reproduces with an untracked file in the checkout:
-its release workflow builds amd64 into `dist/` first.)
+`mise run test-headscale`, also run by CI: see [`tests/README.md`](tests/README.md).
 
 ## Availability and data
 

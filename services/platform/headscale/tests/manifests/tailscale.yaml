@@ -1,0 +1,28 @@
+# A tailnet device: the official client in userspace networking. `runner` is the
+# user of a GitHub-hosted runner. --statedir: Tailscale SSH needs a var root.
+apiVersion: v1
+kind: Pod
+metadata: {name: ${NAME}, namespace: testing}
+spec:
+  terminationGracePeriodSeconds: 1
+  hostAliases:
+    - ip: "${GATEWAY_IP}"
+      hostnames: ["${HOSTNAME}"]
+  containers:
+    - name: tailscale
+      image: tailscale/tailscale:v${TAILSCALE_VERSION}
+      command:
+        - sh
+        - -c
+        - >-
+          apk add -q --no-cache openssh-client curl &&
+          adduser -D runner &&
+          exec tailscaled --tun=userspace-networking --state=mem:
+          --statedir=/var/lib/tailscale --socket=/var/run/tailscale/tailscaled.sock
+      env:
+        - {name: SSL_CERT_DIR, value: "/etc/ssl/certs:/ca"}
+      readinessProbe:
+        exec: {command: ["sh", "-c", "command -v ssh && command -v curl && id runner && test -S /var/run/tailscale/tailscaled.sock"]}
+        periodSeconds: 1
+      volumeMounts: [{name: ca, mountPath: /ca}]
+  volumes: [{name: ca, configMap: {name: test-ca}}]
