@@ -1,0 +1,34 @@
+# The control server Tailscale clients connect to (and the OIDC callback).
+# Public by necessity: clients are not on any private network yet when they
+# reach it. Only the :8080 listener is routed, never metrics/debug or gRPC.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: headscale
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    # Written explicitly to match the Gateway API's own schema defaults,
+    # avoiding permanent OutOfSync in ArgoCD (see crossview/gateway).
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.gatewayName }}
+      namespace: {{ .Values.gateway.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    - {{ printf "%s%s.%s" .Values.gateway.hostPrefix .Values.hostSuffix .Values.domain }}
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ .Values.headscale.serviceName }}
+          port: {{ .Values.headscale.servicePort }}
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      # No request deadline: a client holds its connection open for as long as it
+      # is connected, to receive network updates.
+      timeouts:
+        request: 0s

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: headscale-gateway
+description: >-
+  Exposes headscale at headscale.<domain> on the shared gateway, with the
+  BackendTrafficPolicy that lets the Tailscale control protocol through Envoy.
+type: application
+version: 0.1.0

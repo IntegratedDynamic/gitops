@@ -1,0 +1,20 @@
+# Everything under `restore:` is the generic chart's values
+# (charts/velero-pvc-restore/values.yaml, which documents each one).
+restore:
+  # Escape hatch: false skips the restore entirely (headscale then starts empty
+  # with new keys: every client has to register again). Only for a deliberate
+  # fresh start.
+  enabled: true
+
+  # The Velero schedule that backs the volume up: the `headscale-data` entry of
+  # services/platform/velero/chart/values-scaleway.yaml (the velero chart prefixes
+  # the schedule name with `velero-`).
+  scheduleName: velero-headscale-data
+
+  pvcs:
+    - data-headscale-0
+
+  # The same selector as the schedule's.
+  selectorLabel:
+    key: app.kubernetes.io/name
+    value: headscale

@@ -1,0 +1,138 @@
+# One replica, by design: headscale is a single process on a SQLite file.
+#
+# Fields that look redundant (podManagementPolicy, updateStrategy,
+# revisionHistoryLimit, the retention policy, probe thresholds, the PVC
+# template's apiVersion/kind/status...) are the API server's own defaults,
+# written explicitly so ArgoCD does not show a permanent OutOfSync (see
+# ../../authentik/chart/templates/postgres.yaml).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  serviceName: {{ .Release.Name }}
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 10
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      # Also what the Velero schedule and the restore select the volume by.
+      app.kubernetes.io/name: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Release.Name }}
+      annotations:
+        # Config and policy are read at start only: a change rolls the pod.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: headscale
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          terminationMessagePath: /dev/termination-log
+          {{- if .Values.letsEncryptStaging }}
+          env:
+            # Added to the system roots (SSL_CERT_FILE), not replacing them.
+            - name: SSL_CERT_DIR
+              value: /etc/headscale-ca
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          startupProbe:
+            httpGet: {path: /health, port: http, scheme: HTTP}
+            periodSeconds: 2
+            failureThreshold: 60
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet: {path: /health, port: http, scheme: HTTP}
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /health, port: http, scheme: HTTP}
+            periodSeconds: 20
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/headscale
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/headscale
+            - name: run
+              mountPath: /var/run/headscale
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.letsEncryptStaging }}
+            - name: staging-ca
+              mountPath: /etc/headscale-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-config
+            defaultMode: 420
+            items:
+              - {key: config.yaml, path: config.yaml}
+              - {key: policy.hujson, path: policy.hujson}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.letsEncryptStaging }}
+        - name: staging-ca
+          configMap:
+            name: {{ .Release.Name }}-config
+            defaultMode: 420
+            items:
+              - {key: letsencrypt-staging-root-ca.crt, path: letsencrypt-staging-root-ca.crt}
+        {{- end }}
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: {{ .Values.storage }}
+      status:
+        phase: Pending

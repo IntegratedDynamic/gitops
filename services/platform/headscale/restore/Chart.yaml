@@ -1,0 +1,15 @@
+apiVersion: v2
+name: headscale-restore
+description: >-
+  Restores headscale's data volume (SQLite database: users and registered nodes;
+  and the server's private keys) from the latest Velero CSI snapshot on a fresh
+  cluster, BEFORE headscale itself is created. A thin wrapper: the logic is
+  charts/velero-pvc-restore.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: velero-pvc-restore
+    alias: restore
+    version: 0.1.0
+    repository: "file://../../../../charts/velero-pvc-restore"

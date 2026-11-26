@@ -221,6 +221,25 @@ velero:
         includedResources:
           - persistentvolumeclaims
 
+    # CSI VolumeSnapshot of headscale's data volume: its SQLite database (users,
+    # registered nodes) and the server's private keys exist nowhere else, and
+    # losing the keys makes every client register again. Restored on a fresh
+    # cluster by services/platform/headscale/restore, inside headscale-apps. Same
+    # period and TTL as authentik-data, for the same reasons (see above). The
+    # snapshot is crash-consistent, which SQLite in WAL mode recovers from.
+    headscale-data:
+      schedule: "50 */4 * * *"
+      template:
+        ttl: "1440h" # 60 days
+        storageLocation: default
+        includedNamespaces:
+          - headscale
+        includedResources:
+          - persistentvolumeclaims
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: headscale
+
   # Chart ships resources: {} by default (its own commented-out example
   # suggests 500m/128Mi request, 1000m/512Mi limit — scaled down here
   # since this instance's backup scope is a handful of Secrets, not

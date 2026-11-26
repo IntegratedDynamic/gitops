@@ -1,0 +1,18 @@
+# Tailscale clients open their control connection with an HTTP POST carrying
+# `Upgrade: tailscale-control-protocol`. Envoy only lets listed upgrade types
+# through (websocket by default) and answers 403 to anything else.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: headscale
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: headscale
+  httpUpgrade:
+    - type: tailscale-control-protocol
+    # Kept: listing a type replaces the default, and headscale's embedded
+    # clients (browser/wasm) use websocket.
+    - type: websocket

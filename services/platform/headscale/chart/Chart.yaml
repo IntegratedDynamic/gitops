@@ -1,0 +1,9 @@
+apiVersion: v2
+name: headscale
+description: >-
+  headscale, the self-hosted Tailscale control server: a single-replica
+  StatefulSet with its SQLite database on a volume, its access policy and its
+  configuration as ConfigMaps. In-house chart (upstream publishes none).
+type: application
+version: 0.1.0
+appVersion: "0.29.7"
