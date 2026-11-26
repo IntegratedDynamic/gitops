@@ -44,10 +44,20 @@ spec:
     module: git::{{ .Values.infraRepo }}?ref={{ .Values.gitRef }}
     entrypoint: {{ .Values.workspaces.authentikManaged.entrypoint }}
     remotePullPolicy: Always
+    # -parallelism=2: tofu's default is 10 concurrent provider calls, and every
+    # one is an authentik API request served by the same two gunicorn workers
+    # that answer authentik's own liveness probe. Seen live on a cold start
+    # (2026-11-26): the plan's burst made requests take 3-35 s, the server's
+    # /-/health/live/ missed its timeout, kubelet killed server and worker in a
+    # loop, and each kill made this Workspace fail with `connection refused`
+    # (Synced=False -> crossplane-config Degraded). The plan is a few dozen
+    # reads: slower by seconds, no more starving authentik.
     planArgs:
       - -var-file=env/{{ .Values.workspaces.authentikManaged.externalName }}.tfvars
+      - -parallelism=2
     applyArgs:
       - -var-file=env/{{ .Values.workspaces.authentikManaged.externalName }}.tfvars
+      - -parallelism=2
     env:
       {{- include "crossplane-config.stateCredentialsEnv" . | nindent 6 }}
       - name: TF_VAR_authentik_url
