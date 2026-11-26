@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/juanfont/headscale
+  # One MINOR at a time: headscale refuses to start on a database upgraded by
+  # skipping a minor version, and refuses to downgrade. Take a Velero backup
+  # first (see ../README.md).
+  tag: "0.29.7"
+  pullPolicy: IfNotPresent
+
+domain: staging.scalepack.fr
+
+# Overridden per-cluster by the infra repo's argocd.tf (var.env_suffix, this
+# app's hostSuffix valueParam in values-headscale.yaml). Empty on main's
+# workspace. Must match ../gateway's hostname and authentik's.
+hostSuffix: ""
+
+# headscale.<domain> (the control server URL clients use, ../gateway).
+hostPrefix: headscale
+# MagicDNS names are <node>.<magicDNSPrefix><hostSuffix>.<domain>. Must differ
+# from the control server's own hostname.
+magicDNSPrefix: ts
+
+oidc:
+  # Human logins (`tailscale up`) through authentik. Who may log in is decided
+  # there (infra repo 14-sso/managed, application `headscale`), not here.
+  enabled: true
+  # Slug of the authentik application, hence part of the issuer URL.
+  applicationSlug: headscale
+  clientID: headscale
+  # NOT a secret: the authentik provider is a PUBLIC client (PKCE protects the
+  # code exchange, authentik does not check any secret), but headscale refuses
+  # to start without a non-empty client_secret.
+  clientSecretPlaceholder: public-client-no-secret
+
+# var.letsencrypt_staging (infra repo). Clients cannot trust a staging
+# certificate, so headscale is not usable then; it only has to stay healthy:
+# the staging root is added to its trust store so OIDC discovery still works.
+letsEncryptStaging: false
+
+# Personal (user-owned) nodes must log in again after this long. Tagged nodes
+# never expire.
+nodeExpiry: 180d
+
+storage: 5Gi
+
+# Measured in a test cluster with three nodes: 16Mi in use.
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 192Mi}
+
+serviceMonitor:
+  enabled: true

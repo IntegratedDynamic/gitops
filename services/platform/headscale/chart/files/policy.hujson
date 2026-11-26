@@ -1,0 +1,29 @@
+// headscale access policy (same format as a Tailscale policy file). Git is the
+// only source of truth: policy.mode is `file`, so nothing edits it at runtime.
+// A merge restarts headscale, which reloads it.
+//
+// Same intent as the Tailscale ACL it replaces (infra repo 13-tailscale/bootstrap):
+// personal devices reach each other and the CI runners being debugged; nothing
+// reaches back from a CI runner.
+{
+  // Who may assign a tag by hand (`tailscale up --advertise-tags`). Nobody: a
+  // tagged node only comes from a tagged preauth key or an admin.
+  "tagOwners": {
+    "tag:ci-debug": [],
+  },
+
+  "grants": [
+    {"src": ["autogroup:member"], "dst": ["autogroup:member"], "ip": ["*"]},
+    {"src": ["autogroup:member"], "dst": ["tag:ci-debug"], "ip": ["*"]},
+  ],
+
+  // Tailscale SSH into CI runners, as any non-root user.
+  "ssh": [
+    {
+      "action": "accept",
+      "src": ["autogroup:member"],
+      "dst": ["tag:ci-debug"],
+      "users": ["autogroup:nonroot"],
+    },
+  ],
+}

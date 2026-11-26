@@ -1,0 +1,96 @@
+{{- $host := printf "%s%s.%s" .Values.hostPrefix .Values.hostSuffix .Values.domain }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  policy.hujson: |
+{{ .Files.Get "files/policy.hujson" | indent 4 }}
+  config.yaml: |
+    server_url: https://{{ $host }}
+    listen_addr: 0.0.0.0:8080
+    # Metrics AND /debug: cluster-internal only, never routed by the gateway.
+    metrics_listen_addr: 0.0.0.0:9090
+    # Remote gRPC administration is not exposed: administer with
+    # `kubectl exec` (the CLI talks to the unix socket).
+    grpc_listen_addr: 127.0.0.1:50443
+    grpc_allow_insecure: false
+
+    # Both keys are generated on first start and live on the data volume: losing
+    # noise_private.key makes every client register again.
+    noise:
+      private_key_path: /var/lib/headscale/noise_private.key
+
+    prefixes:
+      v4: 100.64.0.0/10
+      v6: fd7a:115c:a1e0::/48
+      allocation: sequential
+
+    # Tailscale's public relays: nothing to expose, and established tunnels keep
+    # working while this cluster is down.
+    derp:
+      server:
+        enabled: false
+      urls:
+        - https://controlplane.tailscale.com/derpmap/default
+      auto_update_enabled: true
+      update_frequency: 3h
+
+    disable_check_updates: true
+
+    node:
+      expiry: {{ .Values.nodeExpiry }}
+      ephemeral:
+        inactivity_timeout: 30m
+
+    database:
+      type: sqlite
+      sqlite:
+        path: /var/lib/headscale/db.sqlite
+        write_ahead_log: true
+
+    log:
+      level: info
+      format: json
+
+    policy:
+      mode: file
+      path: /etc/headscale/policy.hujson
+
+    # MagicDNS only: node names resolve, and each node keeps its own resolvers
+    # for everything else.
+    dns:
+      magic_dns: true
+      base_domain: {{ printf "%s%s.%s" .Values.magicDNSPrefix .Values.hostSuffix .Values.domain }}
+      override_local_dns: false
+      nameservers:
+        global: []
+
+    unix_socket: /var/run/headscale/headscale.sock
+    unix_socket_permission: "0770"
+
+    logtail:
+      enabled: false
+    {{- if .Values.oidc.enabled }}
+
+    oidc:
+      # Fail (and restart) while authentik is unreachable instead of silently
+      # starting without SSO logins until the next restart.
+      only_start_if_oidc_is_available: true
+      # authentik's issuer is per application, trailing slash included.
+      issuer: https://sso{{ .Values.hostSuffix }}.{{ .Values.domain }}/application/o/{{ .Values.oidc.applicationSlug }}/
+      client_id: {{ .Values.oidc.clientID }}
+      client_secret: {{ .Values.oidc.clientSecretPlaceholder }}
+      scope: ["openid", "profile", "email"]
+      # authentik's default `email` scope mapping always says
+      # email_verified: false.
+      email_verified_required: false
+      pkce:
+        enabled: true
+        method: S256
+    {{- end }}
+  {{- if .Values.letsEncryptStaging }}
+  letsencrypt-staging-root-ca.crt: |
+{{ .Files.Get "files/letsencrypt-staging-root-ca.crt" | indent 4 }}
+  {{- end }}
