@@ -43,7 +43,8 @@ def test_server_is_healthy_behind_a_trusted_certificate():
 
 
 def test_clients_can_discover_the_server_key():
-    status, _, body = fetch("/key?v=109")
+    # v: the client's capability version; headscale refuses old ones.
+    status, _, body = fetch("/key?v=130")
     assert status == 200 and json.loads(body)["publicKey"].startswith("mkey:")
 
 
