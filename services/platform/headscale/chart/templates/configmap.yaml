@@ -79,7 +79,7 @@ data:
       # starting without SSO logins until the next restart.
       only_start_if_oidc_is_available: true
       # authentik's issuer is per application, trailing slash included.
-      issuer: https://sso{{ .Values.hostSuffix }}.{{ .Values.domain }}/application/o/{{ .Values.oidc.applicationSlug }}/
+      issuer: {{ .Values.oidc.issuer | default (printf "https://sso%s.%s/application/o/%s/" .Values.hostSuffix .Values.domain .Values.oidc.applicationSlug) }}
       client_id: {{ .Values.oidc.clientID }}
       client_secret: {{ .Values.oidc.clientSecretPlaceholder }}
       scope: ["openid", "profile", "email"]

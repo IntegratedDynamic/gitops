@@ -25,6 +25,9 @@ oidc:
   enabled: true
   # Slug of the authentik application, hence part of the issuer URL.
   applicationSlug: headscale
+  # Empty: authentik's issuer for that application. Only the tests set it (to
+  # a mock provider).
+  issuer: ""
   clientID: headscale
   # NOT a secret: the authentik provider is a PUBLIC client (PKCE protects the
   # code exchange, authentik does not check any secret), but headscale refuses
@@ -62,8 +65,11 @@ serviceMonitor:
 sts:
   enabled: true
   releasesURL: https://github.com/fredrikekre/headscale-sts/releases/download
-  # v0.2.0 = commit 916abd9324cd97a6da4e04f31ab9cc4b8667b47b, go1.25.0.
+  # The tag, the commit it points to and the Go version of its release build:
+  # tests/test_sts_provenance.py rebuilds from them and compares with sha256.
   version: v0.2.0
+  commit: 916abd9324cd97a6da4e04f31ab9cc4b8667b47b
+  goVersion: go1.25.0
   sha256:
     amd64: 64d8b3bdd56917b649c85bd279fccc51aa3e8e04ecda34196a6a6db1533b55b8
     arm64: f8003af9984e7fd57bff10a1e7540fb275730b31691dc1a5170d41993df84d61

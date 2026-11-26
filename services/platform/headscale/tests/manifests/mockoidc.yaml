@@ -1,0 +1,21 @@
+# Stand-in for authentik: headscale's own mock OIDC server. Its issuer is the
+# address it listens on, hence the pod IP.
+apiVersion: v1
+kind: Pod
+metadata: {name: mockoidc, namespace: testing}
+spec:
+  containers:
+    - name: mockoidc
+      image: ${HEADSCALE_IMAGE}
+      command: ["/ko-app/headscale", "mockoidc"]
+      env:
+        - name: MOCKOIDC_ADDR
+          valueFrom: {fieldRef: {fieldPath: status.podIP}}
+        - {name: MOCKOIDC_PORT, value: "10000"}
+        - {name: MOCKOIDC_CLIENT_ID, value: "${OIDC_CLIENT_ID}"}
+        - {name: MOCKOIDC_CLIENT_SECRET, value: "${OIDC_CLIENT_SECRET}"}
+        # email_verified false, like authentik's default email scope mapping.
+        - name: MOCKOIDC_USERS
+          value: >-
+            [{"Subject":"carol","Email":"carol@example.com","EmailVerified":false,"PreferredUsername":"carol"}]
+      readinessProbe: {tcpSocket: {port: 10000}, periodSeconds: 1}

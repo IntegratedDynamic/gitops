@@ -1,2 +1,16 @@
 [tools]
 helm = "latest"
+# Only for the tests of services/platform/headscale.
+go = "1.25.0"
+kind = "0.33.0"
+kubectl = "1.35"
+python = "3.13"
+
+[tasks.test-headscale]
+description = "headscale tests: charts and pins, then end to end on kind (PYTEST_ADDOPTS to filter)"
+run = """
+set -eu
+python -m venv .venv-headscale
+.venv-headscale/bin/pip install -q -r services/platform/headscale/tests/requirements.txt
+PYTHONDONTWRITEBYTECODE=1 .venv-headscale/bin/pytest -p no:cacheprovider services/platform/headscale/tests
+"""
