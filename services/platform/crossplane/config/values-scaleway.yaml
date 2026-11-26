@@ -43,6 +43,11 @@ authentikToken:
   openbaoPath: apps/authentik/eso-generated
   property: AUTHENTIK_BOOTSTRAP_TOKEN
   secretName: crossplane-authentik-token
+# Password of authentik's read-only database role (ESO-generated, same chart as
+# the token), for the access dashboard's Grafana data source.
+authentikReporting:
+  openbaoPath: apps/authentik-reporting/eso-generated
+  secretName: crossplane-authentik-reporting
 # GitHub OAuth App credentials for authentik's "GitHub" login source: external
 # secrets, Terraform-owned (infra repo's 11-secrets/openbao/managed,
 # vault_kv_secret_v2.authentik_github), unlike the eso-generated token above.

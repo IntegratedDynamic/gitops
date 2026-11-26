@@ -1,0 +1,77 @@
+# The PostgreSQL role Grafana reads authentik's database with, for the "who has
+# access to what" dashboard (infra repo's 14-sso/managed/reporting.tf).
+#
+# Column-level grants on exactly what the dashboard shows. Deliberately absent:
+# password hashes, sessions, tokens, client secrets, passkey material, and the
+# invitation uuid (it IS the invitation link). Grants only, no views: a view
+# would block authentik's own migrations from altering the tables under it.
+#
+# A Job, not an initdb script: the volume is restored from a snapshot on a fresh
+# cluster, and initdb only ever runs on an empty one. Idempotent. The tables
+# exist only once authentik has migrated, so the first attempts may fail: the
+# Job's own retries cover that. A Job's spec is immutable, hence the hash in its
+# name: any change of the SQL creates a new Job and the old one is pruned.
+{{- if and .Values.postgres.enabled .Values.reporting.enabled }}
+{{- $sql := .Files.Get "files/reporting-role.sql" }}
+{{- $hash := printf "%s|%s|%s" $sql .Values.postgres.image (toYaml .Values.reporting) | sha256sum | trunc 8 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-reporting-role
+data:
+  reporting-role.sql: |
+    {{- $sql | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-reporting-role-{{ $hash }}
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Release.Name }}-reporting-role
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+      containers:
+        - name: psql
+          image: {{ .Values.postgres.image }}
+          command:
+            - psql
+            - --no-psqlrc
+            - --set=ON_ERROR_STOP=1
+            - --single-transaction
+            - --set=role={{ .Values.reporting.role }}
+            - --file=/sql/reporting-role.sql
+          env:
+            - {name: PGHOST, value: {{ .Release.Name }}-postgres}
+            - {name: PGUSER, value: {{ .Values.postgres.user | quote }}}
+            - {name: PGDATABASE, value: {{ .Values.postgres.database | quote }}}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.credentialsSecretName }}
+                  key: AUTHENTIK_POSTGRESQL__PASSWORD
+            - name: READER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.reporting.credentialsSecretName }}
+                  key: password
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+      volumes:
+        - name: sql
+          configMap:
+            name: {{ .Release.Name }}-reporting-role
+{{- end }}

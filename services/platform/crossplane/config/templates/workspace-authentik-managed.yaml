@@ -13,7 +13,7 @@
 #           openbao-managed one applies the `eso-generate` policy and the
 #           Terraform-owned OpenBao objects (apps/authentik/oidc-clients,
 #           apps/authentik/credentials) that the wave-2 Secrets read.
-#   wave 2  the three authentik ExternalSecrets (token, oidc, github)
+#   wave 2  the four authentik ExternalSecrets (token, oidc, github, reporting)
 #   wave 3  THIS Workspace
 # A Workspace MUST sit in a LATER wave than every Secret its env reads
 # (secretKeyRef). ArgoCD does not start wave N+1 while a wave-N resource is
@@ -77,5 +77,19 @@ spec:
           namespace: {{ .Values.namespace }}
           name: {{ .Values.authentikGithub.secretName }}
           key: client-secret
+      # 14-sso/managed/reporting.tf: the "who has access to what" dashboard, a
+      # Grafana data source on authentik's database + an admins-only folder.
+      - name: TF_VAR_grafana_url
+        value: {{ .Values.workspaces.grafanaManaged.grafanaUrl | quote }}
+      - name: TF_VAR_grafana_admin_password
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.grafanaAdmin.secretName }}
+          key: admin-password
+      - name: TF_VAR_reporting_db_password
+        secretKeyRef:
+          namespace: {{ .Values.namespace }}
+          name: {{ .Values.authentikReporting.secretName }}
+          key: password
   providerConfigRef:
     name: default
